@@ -7,5 +7,5 @@ WORKDIR /app/simmc2
 
 RUN pip3 install -U pip
 
-RUN pip3 install transformers
+RUN pip3 install transformers tensorboardX
 

@@ -1,10 +1,6 @@
 #!/bin/bash
-if [[ $# -lt 1 ]]
-then
-    PATH_DIR=$(realpath .)
-else
-    PATH_DIR=$(realpath "$1")
-fi
+
+PATH_DIR="/data/simmc2"
 
 # Train (multi-modal)
 python3 -m gpt2_dst.scripts.run_language_modeling \
