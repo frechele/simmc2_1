@@ -157,6 +157,7 @@ def main(args):
                 # Get devtest results.
                 save_path = None
                 if args["result_save_path"]:
+                    os.makedirs(args["result_save_path"], exist_ok=True)
                     save_path = os.path.join(
                         args["result_save_path"], f"results_devtest_best.json"
                     )
