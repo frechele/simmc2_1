@@ -20,6 +20,8 @@ def convert(dialogues, scenes, len_context):
         "objects": [],
         "labels": []
     }
+
+    max_objects = 0
     for dialogue_data in tqdm(dialogues):
         prev_asst_uttr = None
         prev_turn = None
@@ -35,7 +37,7 @@ def convert(dialogues, scenes, len_context):
             mapping = { k: v for k, v in zip(scene["id_to_idx"].keys(), range(last_idx, last_idx + len(scene["id_to_idx"]))) }
             id_to_idx.update(mapping)
 
-        object_map = np.array(object_map)
+        max_objects = max(max_objects, len(object_map))
 
         now_scene = None
         for turn_id, turn in enumerate(dialogue_data[FIELDNAME_DIALOG]):
@@ -61,6 +63,8 @@ def convert(dialogues, scenes, len_context):
             objs = [id_to_idx[obj_id] for obj_id in user_belief["act_attributes"]["objects"]]
             results["objects"].append(object_map)
             results["labels"].append(objs)
+
+    print("max objects:", max_objects)
 
     return results
 
