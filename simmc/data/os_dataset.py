@@ -4,6 +4,8 @@ import numpy as np
 
 from torch.utils.data import Dataset
 
+from simmc.data.preprocess import OBJECT_FEATURE_SIZE
+
 
 class OSDataset(Dataset):
     def __init__(self, filename: str, object_padding: int = 140):
@@ -26,9 +28,9 @@ class OSDataset(Dataset):
 
         objects = self.objects[index]
         object_padding_len = max(0, self.object_padding - len(objects))
-        objects += [np.zeros_like(objects[0])] * object_padding_len
+        object_padding_mask = np.array([0] * len(objects) + [1] * object_padding_len)
+        objects += [np.zeros(OBJECT_FEATURE_SIZE)] * object_padding_len
         objects = np.array(objects)
-        object_padding_mask = np.array([1] * len(objects) + [0] * object_padding_len)
 
         labels = self.labels[index]
         labels_ = np.zeros(objects.shape[0])
@@ -38,7 +40,7 @@ class OSDataset(Dataset):
             "context": context,
             "objects": torch.FloatTensor(objects),
             "labels": torch.LongTensor(labels_),
-            "object_masks": torch.FloatTensor(object_padding_mask)
+            "object_masks": torch.BoolTensor(object_padding_mask)
         }
 
 

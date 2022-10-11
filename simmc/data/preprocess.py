@@ -15,6 +15,9 @@ def metadata_to_vec(metadata):
     raise ValueError(f"Unknown domain: {domain}")
 
 
+OBJECT_FEATURE_SIZE = len(L.TYPE_MAPPING_TABLE) + len(L.ASSET_TYPE_MAPPING_TABLE) + len(L.BRAND_MAPPING_TABLE) + len(L.MATERIAL_MAPPING_TABLE) + len(L.COLOR_MAPPING_TABLE)
+
+
 def fashion_metadata_to_vec(metadata):
     obj_type = label_to_onehot(metadata["type"], L.TYPE_MAPPING_TABLE)
     asset_type = label_to_onehot(metadata["assetType"], L.ASSET_TYPE_MAPPING_TABLE)
