@@ -1,0 +1,10 @@
+import simmc.engine.pretrain_engine
+
+train.engine = @PreTrainEngine
+PreTrainEngine.train_dataset = "/data/simmc2/train_dials.pkl"
+PreTrainEngine.val_dataset = "/data/simmc2/dev_dials.pkl"
+
+PreTrainEngine.batch_size = 32
+PreTrainEngine.lr = 1e-3
+PreTrainEngine.weight_decay = 2e-5
+
