@@ -34,9 +34,9 @@ class OSNet(nn.Module):
         return context_proj, object_proj
 
 
-def calc_object_similarity(context: torch.Tensor, objects: torch.Tensor, object_mask: torch.Tensor):
+def calc_object_similarity(context: torch.Tensor, objects: torch.Tensor):
     sim = torch.einsum("bc,boc->bo", context, objects)
-    return sim.masked_fill(object_mask, -1e5)
+    return sim
 
 
 if __name__ == "__main__":
