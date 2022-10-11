@@ -3,6 +3,8 @@ import json
 import pickle
 from tqdm import tqdm
 
+from simmc.data.preprocess import metadata_to_vec
+
 
 FIELDNAME_DIALOG = "dialogue"
 FIELDNAME_USER_UTTR = "transcript"
@@ -31,7 +33,7 @@ def convert(dialogues, scenes, len_context):
         last_idx = 0
         for scene_name in dialogue_data["scene_ids"].values():
             scene = scenes[scene_name]
-            object_map += scene["objects"]
+            object_map += [metadata_to_vec(obj) for obj in scene["objects"]]
             mapping = { k: v for k, v in zip(scene["id_to_idx"].keys(), range(last_idx, last_idx + len(scene["id_to_idx"]))) }
             id_to_idx.update(mapping)
 

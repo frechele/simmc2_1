@@ -1,5 +1,15 @@
+import numpy as np
+
+
 def _make_mapping_table(lst):
-    return lst, { k: v for k, v in enumerate(lst) }
+    return lst, { k: v for v, k in enumerate(lst) }
+
+def label_to_onehot(value, mapping_table):
+    return np.eye(len(mapping_table))[mapping_table[value]]
+
+def labels_to_vector(values, mapping_table):
+    return np.sum([label_to_onehot(value, mapping_table) for value in values], axis=0)
+
 
 TYPE, TYPE_MAPPING_TABLE = _make_mapping_table([
     "EndTable",  # furniture
