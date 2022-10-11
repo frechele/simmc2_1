@@ -18,7 +18,7 @@ def convert(dialogues, scenes, len_context):
             "domain": dialogue_data["domain"],
             "id": dialogue_data["dialogue_idx"],
             "context": [],
-            "objects": [],
+            "related_objects": []
         }
 
         prev_asst_uttr = None
@@ -34,6 +34,8 @@ def convert(dialogues, scenes, len_context):
             object_map += scene["objects"]
             mapping = { k: v for k, v in zip(scene["id_to_idx"].keys(), range(last_idx, last_idx + len(scene["id_to_idx"]))) }
             id_to_idx.update(mapping)
+
+        dialogue["objects"] = object_map
 
         now_scene = None
         for turn_id, turn in enumerate(dialogue_data[FIELDNAME_DIALOG]):
@@ -56,8 +58,8 @@ def convert(dialogues, scenes, len_context):
             context = " ".join(lst_context[-len_context:])
 
             dialogue["context"].append(context)
-            objs = [object_map[id_to_idx[obj_id]] for obj_id in user_belief["act_attributes"]["objects"]]
-            dialogue["objects"].append(objs)
+            objs = [id_to_idx[obj_id] for obj_id in user_belief["act_attributes"]["objects"]]
+            dialogue["related_objects"].append(objs)
 
         results.append(dialogue)
 
