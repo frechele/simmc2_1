@@ -61,20 +61,19 @@ if __name__ == "__main__":
         scene_name = os.path.basename(scene_fname)[:-11]
 
         scene = {
-            "objects": [None] * len(scene_data["objects"]),
+            "objects": [],
             "id_to_idx": dict(),
             "relationships": scene_data["relationships"],
         }
 
-        for obj in scene_data["objects"]:
-            unique_id = obj["unique_id"]
+        for unique_id, obj in enumerate(scene_data["objects"]):
             obj_id = obj["index"]
 
             obj_info = metadata[obj["prefab_path"]]
             obj_info["object_id"] = obj_id
             obj_info["bbox"] = obj["bbox"]
 
-            scene["objects"][unique_id] = obj_info
+            scene["objects"].append(obj_info)
 
             scene["id_to_idx"][obj_id] = unique_id
 
