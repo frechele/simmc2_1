@@ -51,7 +51,7 @@ if __name__ == "__main__":
         with open(scene_fname, "rt") as f:
             scene_data = json.load(f)["scenes"][0]
 
-        scene_name = os.path.basename(scene_fname)[:-5]
+        scene_name = os.path.basename(scene_fname)[:-11]
 
         scene = {
             "objects": [None] * len(scene_data["objects"]),
