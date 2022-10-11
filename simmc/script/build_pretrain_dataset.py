@@ -2,6 +2,7 @@ import argparse
 import json
 import pickle
 from tqdm import tqdm
+import numpy as np
 
 from simmc.data.preprocess import metadata_to_vec
 
@@ -14,15 +15,12 @@ FIELDNAME_SYSTEM_STATE = "system_transcript_annotated"
 
 
 def convert(dialogues, scenes, len_context):
-    results = []
+    results = {
+        "context": [],
+        "objects": [],
+        "labels": []
+    }
     for dialogue_data in tqdm(dialogues):
-        dialogue = {
-            "domain": dialogue_data["domain"],
-            "id": dialogue_data["dialogue_idx"],
-            "context": [],
-            "related_objects": []
-        }
-
         prev_asst_uttr = None
         prev_turn = None
         lst_context = []
@@ -37,7 +35,7 @@ def convert(dialogues, scenes, len_context):
             mapping = { k: v for k, v in zip(scene["id_to_idx"].keys(), range(last_idx, last_idx + len(scene["id_to_idx"]))) }
             id_to_idx.update(mapping)
 
-        dialogue["objects"] = object_map
+        object_map = np.array(object_map)
 
         now_scene = None
         for turn_id, turn in enumerate(dialogue_data[FIELDNAME_DIALOG]):
@@ -59,11 +57,10 @@ def convert(dialogues, scenes, len_context):
             lst_context.append(context)
             context = " ".join(lst_context[-len_context:])
 
-            dialogue["context"].append(context)
+            results["context"].append(context)
             objs = [id_to_idx[obj_id] for obj_id in user_belief["act_attributes"]["objects"]]
-            dialogue["related_objects"].append(objs)
-
-        results.append(dialogue)
+            results["objects"].append(object_map)
+            results["labels"].append(objs)
 
     return results
 
