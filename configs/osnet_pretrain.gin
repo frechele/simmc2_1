@@ -1,6 +1,6 @@
 import simmc.engine.pretrain_engine
 
-train.engine = @PreTrainEngine
+train.engine = @PreTrainEngine()
 PreTrainEngine.train_dataset = "/data/simmc2/train_dials.pkl"
 PreTrainEngine.val_dataset = "/data/simmc2/dev_dials.pkl"
 
