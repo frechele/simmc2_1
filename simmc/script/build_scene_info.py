@@ -13,6 +13,13 @@ def load_metadata(filename: str, domain: str):
     for k in data:
         data[k]["domain"] = domain
 
+    if domain == "fashion":
+        for k in data:
+            data[k]["color"] = data[k]["color"].split(", ")
+    elif domain == "furniture":
+        for k in data:
+            data[k]["color"] = data[k]["color"].split(" and ")
+
     return data
 
 
