@@ -101,7 +101,7 @@ class PreTrainEngine(pl.LightningModule):
         loss = self.loss(output, labels).item()
         self.val_loss = (self.val_loss * batch_idx + loss) / (batch_idx + 1)
 
-    @rank_zero_only()
+    @rank_zero_only
     def on_validation_end(self):
         mlflow.log_metric("val_loss", self.val_loss, step=self.global_step)
 
@@ -112,6 +112,7 @@ class PreTrainEngine(pl.LightningModule):
                 log_model = False
 
         if log_model:
+            self.max_val_loss = self.val_loss
             print("new best model (val_loss: {:.4f})".format(self.val_loss))
             mlflow.pytorch.log_model(self.model, "model")
             
