@@ -25,6 +25,9 @@ def convert(dialogues, scenes, len_context):
 
         "context": [],
         "objects": [],
+        "object_ids": [],
+
+        "raw_metadata": [],
 
         # subtask 2 outputs
         "disamb": [],
@@ -44,14 +47,21 @@ def convert(dialogues, scenes, len_context):
         lst_context = []
 
         object_map = []
+        raw_metadata = dict()
         id_to_idx = dict()
 
         last_idx = 0
         for scene_name in dialogue_data["scene_ids"].values():
             scene = scenes[scene_name]
-            object_map += [metadata_to_vec(obj) for obj in scene["objects"]]
-            mapping = { k: v for k, v in zip(scene["id_to_idx"].keys(), range(last_idx, last_idx + len(scene["id_to_idx"]))) }
-            id_to_idx.update(mapping)
+
+            for object_id, old_idx in scene["id_to_idx"].items():
+                if object_id in id_to_idx:
+                    continue
+
+                new_idx = len(object_map)
+                object_map.append(metadata_to_vec(scene["objects"][old_idx]))
+                raw_metadata[object_id] = scene["objects"][old_idx]
+                id_to_idx[object_id] = new_idx
 
         max_objects = max(max_objects, len(object_map))
 
@@ -75,6 +85,11 @@ def convert(dialogues, scenes, len_context):
 
             results["context"].append(context)
 
+            objs = [id_to_idx[obj_id] for obj_id in user_belief["act_attributes"]["objects"]]
+            results["objects"].append(object_map)
+            results["object_ids"].append(list(id_to_idx.keys()))
+            results["raw_metadata"].append(raw_metadata)
+
             # subtask 2 outputs
             results["disamb"].append(user_belief[FIELDNAME_DISAMB_LABEL])
             disamb_objs = [id_to_idx[obj_id] for obj_id in user_belief[FIELDNAME_DISAMB_OBJS]]
@@ -96,9 +111,6 @@ def convert(dialogues, scenes, len_context):
             else:
                 slots = labels_to_vector(slots, L.SLOT_KEY_MAPPING_TABLE)
             results["slots"].append(slots)
-
-            objs = [id_to_idx[obj_id] for obj_id in user_belief["act_attributes"]["objects"]]
-            results["objects"].append(object_map)
 
             results["labels"].append(objs)
 
