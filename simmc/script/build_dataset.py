@@ -78,7 +78,7 @@ def convert(dialogues, scenes, len_context):
             # subtask 2 outputs
             results["disamb"].append(user_belief[FIELDNAME_DISAMB_LABEL])
             disamb_objs = [id_to_idx[obj_id] for obj_id in user_belief[FIELDNAME_DISAMB_OBJS]]
-            results["disamb_objects"] = disamb_objs
+            results["disamb_objects"].append(disamb_objs)
 
             # subtask 3 outputs
             results["acts"].append(label_to_onehot(user_belief["act"], L.ACTION_MAPPING_TABLE))
