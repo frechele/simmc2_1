@@ -24,6 +24,7 @@ def convert(dialogues, scenes, len_context):
         "turn_idx": [],
 
         "context": [],
+        "objects": [],
 
         # subtask 2 outputs
         "disamb": [],
@@ -34,7 +35,6 @@ def convert(dialogues, scenes, len_context):
         "is_request": [],
         "slots": [],
 
-        "objects": [],
         "labels": []
     }
 
