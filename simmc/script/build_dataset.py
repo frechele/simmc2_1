@@ -5,6 +5,8 @@ from tqdm import tqdm
 import numpy as np
 
 from simmc.data.preprocess import metadata_to_vec
+import simmc.data.labels as L
+from simmc.data.labels import label_to_onehot, labels_to_vector
 
 
 FIELDNAME_DIALOG = "dialogue"
@@ -12,11 +14,26 @@ FIELDNAME_USER_UTTR = "transcript"
 FIELDNAME_ASST_UTTR = "system_transcript"
 FIELDNAME_BELIEF_STATE = "transcript_annotated"
 FIELDNAME_SYSTEM_STATE = "system_transcript_annotated"
+FIELDNAME_DISAMB_LABEL = "disambiguation_label"
+FIELDNAME_DISAMB_OBJS = "disambiguation_candidates"
 
 
 def convert(dialogues, scenes, len_context):
     results = {
+        "dialogue_idx": [],
+        "turn_idx": [],
+
         "context": [],
+
+        # subtask 2 outputs
+        "disamb": [],
+        "disamb_objects": [],
+
+        # subtask 3 outputs
+        "acts": [],
+        "is_request": [],
+        "slots": [],
+
         "objects": [],
         "labels": []
     }
@@ -24,7 +41,6 @@ def convert(dialogues, scenes, len_context):
     max_objects = 0
     for dialogue_data in tqdm(dialogues):
         prev_asst_uttr = None
-        prev_turn = None
         lst_context = []
 
         object_map = []
@@ -39,11 +55,7 @@ def convert(dialogues, scenes, len_context):
 
         max_objects = max(max_objects, len(object_map))
 
-        now_scene = None
         for turn_id, turn in enumerate(dialogue_data[FIELDNAME_DIALOG]):
-            if str(turn_id) in dialogue_data["scene_ids"]:
-                now_scene = scenes[dialogue_data["scene_ids"][str(turn_id)]]
-
             user_uttr = turn.get(FIELDNAME_USER_UTTR, "").replace("\n", " ").strip()
             user_belief = turn.get(FIELDNAME_BELIEF_STATE, {})
             asst_uttr = turn.get(FIELDNAME_ASST_UTTR, "").replace("\n", " ").strip()
@@ -54,14 +66,35 @@ def convert(dialogues, scenes, len_context):
 
             context += f"User : {user_uttr}"
             prev_asst_uttr = asst_uttr
-            prev_turn = turn
 
             lst_context.append(context)
             context = " ".join(lst_context[-len_context:])
 
+            results["dialogue_idx"].append(dialogue_data["dialogue_idx"])
+            results["turn_idx"].append(turn_id)
+
             results["context"].append(context)
+
+            # subtask 2 outputs
+            results["disamb"].append(user_belief[FIELDNAME_DISAMB_LABEL])
+            disamb_objs = [id_to_idx[obj_id] for obj_id in user_belief[FIELDNAME_DISAMB_OBJS]]
+            results["disamb_objects"] = disamb_objs
+
+            # subtask 3 outputs
+            results["acts"].append(label_to_onehot(user_belief["act"], L.ACTION_MAPPING_TABLE))
+
+            is_request = len(user_belief["act_attributes"]["request_slots"]) > 0
+            results["is_request"].append(is_request)
+
+            if is_request:
+                slots = user_belief["act_attributes"]["request_slots"]
+            else:
+                slots = list(user_belief["act_attributes"]["slot_values"].keys())
+            results["slots"].append(labels_to_vector(slots, L.SLOT_KEY_MAPPING_TABLE))
+
             objs = [id_to_idx[obj_id] for obj_id in user_belief["act_attributes"]["objects"]]
             results["objects"].append(object_map)
+
             results["labels"].append(objs)
 
     print("max objects:", max_objects)

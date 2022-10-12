@@ -176,3 +176,30 @@ SLEEVE_LENGTH, SLEEVE_LENGTH_MAPPING_TABLE = _make_mapping_table([
     "full",
     "short"
 ])
+
+ACTION, ACTION_MAPPING_TABLE = _make_mapping_table([
+    "INFORM:DISAMBIGUATE",
+    "REQUEST:DISAMBIGUATE",
+    "REQUEST:ADD_TO_CART",
+    "CONFIRM:ADD_TO_CART",
+    "ASK:GET",
+    "INFORM:GET",
+    "REQUEST:GET",
+    "INFORM:COMPARE",
+    "REQUEST:COMPARE",
+    "INFORM:REFINE"
+])
+
+SLOT_KEY, SLOT_KEY_MAPPING_TABLE = _make_mapping_table([
+    "customerRating",
+    "color",
+    "sleeveLength",
+    "availableSizes",
+    "materials",
+    "brand",
+    "customerReview",
+    "pattern",
+    "size",
+    "price",
+    "type"
+])
