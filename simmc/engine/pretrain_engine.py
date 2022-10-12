@@ -1,6 +1,8 @@
 import gin
 
 import pytorch_lightning as pl
+from pytorch_lightning.utilities.rank_zero import rank_zero_only
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -99,6 +101,7 @@ class PreTrainEngine(pl.LightningModule):
         loss = self.loss(output, labels).item()
         self.val_loss = (self.val_loss * batch_idx + loss) / (batch_idx + 1)
 
+    @rank_zero_only()
     def on_validation_end(self):
         mlflow.log_metric("val_loss", self.val_loss, step=self.global_step)
 
