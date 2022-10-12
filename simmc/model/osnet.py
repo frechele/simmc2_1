@@ -18,8 +18,6 @@ class OSNet(nn.Module):
         super(OSNet, self).__init__()
 
         self.bert = AlbertModel.from_pretrained("albert-base-v2")
-        for param in self.bert.parameters():
-            param.requires_grad = False
 
         self.projection_dim = 512
 

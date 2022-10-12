@@ -23,12 +23,12 @@ def train(args, engine, experiment_name: str):
     swa_callback = plc.StochasticWeightAveraging(swa_lrs=1e-2)
 
     trainer_args = {
+        "precision": 16,
         "gradient_clip_val": 1.0,
         "callbacks": [swa_callback],
     }
 
     trainer = pl.Trainer.from_argparse_args(args,
-        strategy=pl.plugins.DDPPlugin(find_unused_parameters=False),
         **trainer_args
     )
     trainer.fit(engine)

@@ -79,10 +79,10 @@ class OSNetEngine(pl.LightningModule):
         outputs = self.model(context, objects)
 
         pred_label = calc_object_similarity(outputs.context_proj, outputs.object_proj)
-        pred_label.masked_fill_(object_masks, -1e5)
+        pred_label.masked_fill_(object_masks, -1e4)
 
         pred_disambs = calc_object_similarity(outputs.context_proj, outputs.disamb_proj)
-        pred_disambs.masked_fill_(object_masks, -1e5)
+        pred_disambs.masked_fill_(object_masks, -1e4)
 
         loss_disamb = F.binary_cross_entropy_with_logits(outputs.disamb, disamb)
         loss_disamb_obj = F.multilabel_soft_margin_loss(pred_disambs, disamb_objects, reduce=False)
@@ -121,10 +121,10 @@ class OSNetEngine(pl.LightningModule):
         outputs = self.model(context, objects)
 
         pred_label = calc_object_similarity(outputs.context_proj, outputs.object_proj)
-        pred_label.masked_fill_(object_masks, -1e5)
+        pred_label.masked_fill_(object_masks, -1e4)
 
         pred_disambs = calc_object_similarity(outputs.context_proj, outputs.disamb_proj)
-        pred_disambs.masked_fill_(object_masks, -1e5)
+        pred_disambs.masked_fill_(object_masks, -1e4)
 
         loss_disamb = F.binary_cross_entropy_with_logits(outputs.disamb, disamb)
         loss_disamb_obj = F.multilabel_soft_margin_loss(pred_disambs, disamb_objects, reduce=False)
@@ -161,7 +161,30 @@ class OSNetEngine(pl.LightningModule):
             
 
     def configure_optimizers(self):
-        opt = optim.AdamW(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        low_lr_parameters = [
+            self.model.bert
+        ]
+
+        high_lr_parameters = [
+            self.model.context_proj,
+            self.model.object_feat,
+            self.model.object_proj,
+            self.model.disamb_classifier,
+            self.model.disamb_proj,
+            self.model.act_classifier,
+            self.model.is_req_classifier,
+            self.model.slot_classifier
+        ]
+
+        opt_elements = []
+        opt_elements.extend([
+            { "params": m.parameters(), "lr": self.lr * 1e-3, "weight_decay": self.weight_decay }
+            for m in low_lr_parameters])
+        opt_elements.extend([
+            { "params": m.parameters(), "lr": self.lr, "weight_decay": self.weight_decay }
+            for m in high_lr_parameters])
+
+        opt = optim.AdamW(opt_elements)
         sch = CosineAnnealingWarmRestarts(opt, T_0=10, T_mult=2, eta_min=1e-8)
         return [opt], [sch]
 
