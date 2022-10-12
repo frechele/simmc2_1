@@ -7,6 +7,9 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 
+import mlflow
+import mlflow.pytorch
+
 from transformers import AlbertTokenizer
 
 from simmc.data.os_dataset import OSDataset
@@ -54,6 +57,8 @@ class PreTrainEngine(pl.LightningModule):
 
         self.collate_fn = collate_fn()
 
+        self.max_val_loss = None
+
     @property
     def train_dataset(self):
         return OSDataset(self.train_dataset_path)
@@ -74,7 +79,12 @@ class PreTrainEngine(pl.LightningModule):
 
         loss = self.loss(output, labels)
 
+        mlflow.log_metric("train_loss", loss.item(), step=self.global_step)
+
         return loss
+
+    def on_validation_start(self):
+        self.val_loss = 0
 
     def validation_step(self, batch, batch_idx):
         context = batch["context"]
@@ -87,8 +97,21 @@ class PreTrainEngine(pl.LightningModule):
         output.masked_fill(object_masks, -1e5)
 
         loss = self.loss(output, labels).item()
+        self.val_loss = (self.val_loss * batch_idx + loss) / (batch_idx + 1)
 
-        self.log("val_loss", loss, prog_bar=True, sync_dist=True)
+    def on_validation_end(self):
+        mlflow.log_metric("val_loss", self.val_loss, step=self.global_step)
+
+        log_model = True 
+
+        if self.max_val_loss:
+            if self.max_val_loss < self.val_loss:
+                log_model = False
+
+        if log_model:
+            print("new best model (val_loss: {:.4f})".format(self.val_loss))
+            mlflow.pytorch.log_model(self.model, "model")
+            
 
     def configure_optimizers(self):
         opt = optim.AdamW(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
