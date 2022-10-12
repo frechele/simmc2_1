@@ -81,7 +81,7 @@ def convert(dialogues, scenes, len_context):
             results["disamb_objects"].append(disamb_objs)
 
             # subtask 3 outputs
-            results["acts"].append(label_to_onehot(user_belief["act"], L.ACTION_MAPPING_TABLE))
+            results["acts"].append(L.ACTION_MAPPING_TABLE[user_belief["act"]])
 
             is_request = len(user_belief["act_attributes"]["request_slots"]) > 0
             results["is_request"].append(is_request)
@@ -90,7 +90,12 @@ def convert(dialogues, scenes, len_context):
                 slots = user_belief["act_attributes"]["request_slots"]
             else:
                 slots = list(user_belief["act_attributes"]["slot_values"].keys())
-            results["slots"].append(labels_to_vector(slots, L.SLOT_KEY_MAPPING_TABLE))
+            
+            if len(slots) == 0:
+                slots = np.zeros(len(L.SLOT_KEY_MAPPING_TABLE))
+            else:
+                slots = labels_to_vector(slots, L.SLOT_KEY_MAPPING_TABLE)
+            results["slots"].append(slots)
 
             objs = [id_to_idx[obj_id] for obj_id in user_belief["act_attributes"]["objects"]]
             results["objects"].append(object_map)

@@ -1,10 +1,16 @@
+from collections import namedtuple
+
 import torch
 import torch.nn as nn
 
 from transformers import AlbertModel
 
 from simmc.data.preprocess import OBJECT_FEATURE_SIZE
+import simmc.data.labels as L
 
+
+OSNetOutput = namedtuple("OSNetOutput",
+    ["context_proj", "object_proj", "disamb", "disamb_proj", "acts", "is_request", "slots"])
 
 # Object Sentence network
 class OSNet(nn.Module):
@@ -19,19 +25,47 @@ class OSNet(nn.Module):
 
         self.context_proj = nn.Linear(768, self.projection_dim)
 
-        self.object_proj = nn.Sequential(
+        self.object_feat = nn.Sequential(
             nn.Linear(OBJECT_FEATURE_SIZE, 256),
             nn.ReLU(inplace=True),
-            nn.Linear(256, self.projection_dim)
+            nn.Linear(256, 128),
+            nn.ReLU(inplace=True),
+            nn.Linear(128, 256)
         )
+
+        self.object_proj = nn.Linear(256, self.projection_dim)
+
+        self.disamb_classifier = nn.Linear(768, 1)
+        self.disamb_proj = nn.Linear(256, self.projection_dim)
+
+        self.act_classifier = nn.Linear(768, len(L.ACTION))
+        self.is_req_classifier = nn.Linear(768, 1)
+        self.slot_classifier = nn.Linear(768, len(L.SLOT_KEY))
+
 
     def forward(self, context_inputs, objects):
         context_feat = self.bert(**context_inputs).last_hidden_state[:, 0, :]
+        object_feat = self.object_feat(objects)
 
         context_proj = self.context_proj(context_feat)
-        object_proj = self.object_proj(objects)
+        object_proj = self.object_proj(object_feat)
 
-        return context_proj, object_proj
+        disamb = self.disamb_classifier(context_feat)
+        disamb_proj = self.disamb_proj(object_feat)
+
+        act = self.act_classifier(context_feat)
+        is_req = self.is_req_classifier(context_feat)
+        slot = self.slot_classifier(context_feat)
+
+        return OSNetOutput(
+            context_proj=context_proj,
+            object_proj=object_proj,
+            disamb=disamb,
+            disamb_proj=disamb_proj,
+            acts=act,
+            is_request=is_req,
+            slots=slot
+        )
 
 
 def calc_object_similarity(context: torch.Tensor, objects: torch.Tensor):

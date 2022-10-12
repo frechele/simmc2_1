@@ -16,6 +16,16 @@ class OSDataset(Dataset):
 
         self.context = data["context"]
         self.objects = data["objects"]
+
+        # subtask 2
+        self.disamb = data["disamb"]
+        self.disamb_objects = data["disamb_objects"]
+
+        # subtask 3
+        self.acts = data["acts"]
+        self.is_request = data["is_request"]
+        self.slots = data["slots"]
+
         self.labels = data["labels"]
 
         self.object_padding = object_padding
@@ -32,6 +42,17 @@ class OSDataset(Dataset):
         objects += [np.zeros(OBJECT_FEATURE_SIZE)] * object_padding_len
         objects = np.array(objects)
 
+        # subtask 2
+        disamb = self.disamb[index]
+        disamb_objects = self.disamb_objects[index]
+        disamb_objects_ = np.zeros(objects.shape[0])
+        disamb_objects_[disamb_objects] = 1
+
+        # subtask 3
+        acts = self.acts[index]
+        is_request = int(self.is_request[index])
+        slots = self.slots[index]
+
         labels = self.labels[index]
         labels_ = np.zeros(objects.shape[0])
         labels_[labels] = 1
@@ -39,8 +60,16 @@ class OSDataset(Dataset):
         return {
             "context": context,
             "objects": torch.FloatTensor(objects),
+            "object_masks": torch.BoolTensor(object_padding_mask),
+
+            "disamb": torch.tensor(disamb).float().unsqueeze(-1),
+            "disamb_objects": torch.LongTensor(disamb_objects_),
+
+            "acts": torch.tensor(acts).long(),
+            "is_request": torch.tensor(is_request).float().unsqueeze(-1),
+            "slots": torch.FloatTensor(slots),
+
             "labels": torch.LongTensor(labels_),
-            "object_masks": torch.BoolTensor(object_padding_mask)
         }
 
 
