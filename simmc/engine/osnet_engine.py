@@ -167,8 +167,8 @@ class OSNetEngine(pl.LightningModule):
 
     def train_dataloader(self):
         return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True,
-            collate_fn=self.collate_fn, pin_memory=True)
+            collate_fn=self.collate_fn, num_workers=4, pin_memory=True)
 
     def val_dataloader(self):
         return DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False,
-            collate_fn=self.collate_fn, pin_memory=True)
+            collate_fn=self.collate_fn, num_workers=4, pin_memory=True)
