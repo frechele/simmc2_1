@@ -31,7 +31,7 @@ class Predictor:
         self.tokenizer = AlbertTokenizer.from_pretrained("albert-base-v2")
 
     @torch.no_grad()
-    def predict(self, context, objects, object_ids):
+    def predict(self, context, objects, object_ids, metadata):
         context = self.tokenizer([context], padding=True, truncation=True, return_tensors="pt").to(device)
         objects = torch.FloatTensor(np.stack(objects)).unsqueeze(0).to(device)
 
@@ -68,8 +68,11 @@ class Predictor:
             for i, obj_id in enumerate(object_ids):
                 if objects_proj[i] > 0:
                     objects.append(obj_id)
-                    for slot in slots:
-                        slot_values.append([slot, obj_id])
+
+            for obj_id in objects:
+                for slot in slots:
+                    if obj_id in metadata and slot in metadata[obj_id]:
+                        slot_values.append([slot, metadata[obj_id][slot]])
 
 
         belief_state = "{act} [ {slot_values} ] ({request_slots}) < {objects} > | {disamb_candidates} |".format(
@@ -125,8 +128,9 @@ if __name__ == "__main__":
         context = data["context"][idx]
         objects = data["objects"][idx]
         object_ids = data["object_ids"][idx]
+        metadata = data["raw_metadata"][idx]
 
-        str_belief_state = predictor.predict(context, objects, object_ids)
+        str_belief_state = predictor.predict(context, objects, object_ids, metadata)
 
         outputs[(dialogue_idx, turn_idx)] = TEMPLATE_TARGET.format(
             context=context,
