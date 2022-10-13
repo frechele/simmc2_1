@@ -372,7 +372,7 @@ def d_f1(n_true, n_pred, n_correct):
     dp = b_stderr(n_pred, n_correct)
 
     r = n_correct / n_true
-    p = n_correct / n_pred
+    p = n_correct / n_pred if n_pred != 0 else 0
     f1 = 2 * p * r / (p + r) if p + r != 0 else 0
 
     d_f1 = 0.5 * f1 ** 2 * (dr / r ** 2 + dp / p ** 2)
