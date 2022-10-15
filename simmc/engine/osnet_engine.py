@@ -38,7 +38,7 @@ class collate_fn:
 @gin.configurable
 class OSNetEngine(pl.LightningModule):
     def __init__(self, train_dataset: str, val_dataset: str,
-        batch_size: int = 32, lr: float = 1e-3, weight_decay: float = 1e-5):
+        batch_size: int = 32, lr: float = 1e-3, bert_lr: float = 1e-6, weight_decay: float = 1e-5):
         super(OSNetEngine, self).__init__()
 
         self.model = OSNet()
@@ -48,6 +48,7 @@ class OSNetEngine(pl.LightningModule):
 
         self.batch_size = batch_size
         self.lr = lr
+        self.bert_lr = bert_lr
         self.weight_decay = weight_decay
 
         self.collate_fn = collate_fn()
@@ -97,12 +98,26 @@ class OSNetEngine(pl.LightningModule):
 
         loss = loss_label + loss_disamb + loss_disamb_obj + loss_act + loss_is_req + loss_slots
 
-        mlflow.log_metric("train_loss", loss.item(), step=self.global_step)
+        mlflow.log_metrics({
+            "train_loss": loss.item(),
+            "train_loss_disamb": loss_disamb.item(),
+            "train_loss_disamb_obj": loss_disamb_obj.item(),
+            "train_loss_act": loss_act.item(),
+            "train_loss_is_req": loss_is_req.item(),
+            "train_loss_slots": loss_slots.item(),
+            "train_loss_label": loss_label.item()
+        }, step=self.global_step)
 
         return loss
 
     def on_validation_start(self):
         self.val_loss = 0
+        self.val_loss_disamb = 0
+        self.val_loss_disamb_obj = 0
+        self.val_loss_act = 0
+        self.val_loss_is_req = 0
+        self.val_loss_slots = 0
+        self.val_loss_label = 0
 
     def validation_step(self, batch, batch_idx):
         context = batch["context"]
@@ -139,12 +154,28 @@ class OSNetEngine(pl.LightningModule):
 
         loss = loss_label + loss_disamb + loss_disamb_obj + loss_act + loss_is_req + loss_slots
 
-        loss = loss.item()
-        self.val_loss = (self.val_loss * batch_idx + loss) / (batch_idx + 1)
+        def _update_stat(v, nv):
+            return (v * batch_idx + nv) / (batch_idx + 1)
+
+        self.val_loss = _update_stat(self.val_loss, loss.item())
+        self.val_loss_disamb = _update_stat(self.val_loss_disamb, loss_disamb.item())
+        self.val_loss_disamb_obj = _update_stat(self.val_loss_disamb_obj, loss_disamb_obj.item())
+        self.val_loss_act = _update_stat(self.val_loss_act, loss_act.item())
+        self.val_loss_is_req = _update_stat(self.val_loss_is_req, loss_is_req.item())
+        self.val_loss_slots = _update_stat(self.val_loss_slots, loss_slots.item())
+        self.val_loss_label = _update_stat(self.val_loss_label, loss_label.item())
 
     @rank_zero_only
     def on_validation_end(self):
-        mlflow.log_metric("val_loss", self.val_loss, step=self.global_step)
+        mlflow.log_metrics({
+            "val_loss": self.val_loss,
+            "val_loss_disamb": self.val_loss_disamb,
+            "val_loss_disamb_obj": self.val_loss_disamb_obj,
+            "val_loss_act": self.val_loss_act,
+            "val_loss_is_req": self.val_loss_is_req,
+            "val_loss_slots": self.val_loss_slots,
+            "val_loss_label": self.val_loss_label
+        }, step=self.global_rank)
 
         log_model = True 
 
@@ -178,7 +209,7 @@ class OSNetEngine(pl.LightningModule):
 
         opt_elements = []
         opt_elements.extend([
-            { "params": m.parameters(), "lr": self.lr * 1e-3, "weight_decay": self.weight_decay }
+            { "params": m.parameters(), "lr": self.bert_lr, "weight_decay": self.weight_decay }
             for m in low_lr_parameters])
         opt_elements.extend([
             { "params": m.parameters(), "lr": self.lr, "weight_decay": self.weight_decay }
