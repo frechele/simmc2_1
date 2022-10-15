@@ -98,26 +98,15 @@ class OSNetEngine(pl.LightningModule):
 
         loss = loss_label + loss_disamb + loss_disamb_obj + loss_act + loss_is_req + loss_slots
 
-        mlflow.log_metrics({
-            "train_loss": loss.item(),
-            "train_loss_disamb": loss_disamb.item(),
-            "train_loss_disamb_obj": loss_disamb_obj.item(),
-            "train_loss_act": loss_act.item(),
-            "train_loss_is_req": loss_is_req.item(),
-            "train_loss_slots": loss_slots.item(),
-            "train_loss_label": loss_label.item()
-        }, step=self.global_step)
+        self.log("train_loss", loss.item())
+        self.log("train_loss_disamb", loss_disamb.item())
+        self.log("train_loss_disamb_obj", loss_disamb_obj.item())
+        self.log("train_loss_act", loss_act.item())
+        self.log("train_loss_is_req", loss_is_req.item())
+        self.log("train_loss_slots", loss_slots.item())
+        self.log("train_loss_label", loss_label.item())
 
         return loss
-
-    def on_validation_start(self):
-        self.val_loss = 0
-        self.val_loss_disamb = 0
-        self.val_loss_disamb_obj = 0
-        self.val_loss_act = 0
-        self.val_loss_is_req = 0
-        self.val_loss_slots = 0
-        self.val_loss_label = 0
 
     def validation_step(self, batch, batch_idx):
         context = batch["context"]
@@ -154,42 +143,13 @@ class OSNetEngine(pl.LightningModule):
 
         loss = loss_label + loss_disamb + loss_disamb_obj + loss_act + loss_is_req + loss_slots
 
-        def _update_stat(v, nv):
-            return (v * batch_idx + nv) / (batch_idx + 1)
-
-        self.val_loss = _update_stat(self.val_loss, loss.item())
-        self.val_loss_disamb = _update_stat(self.val_loss_disamb, loss_disamb.item())
-        self.val_loss_disamb_obj = _update_stat(self.val_loss_disamb_obj, loss_disamb_obj.item())
-        self.val_loss_act = _update_stat(self.val_loss_act, loss_act.item())
-        self.val_loss_is_req = _update_stat(self.val_loss_is_req, loss_is_req.item())
-        self.val_loss_slots = _update_stat(self.val_loss_slots, loss_slots.item())
-        self.val_loss_label = _update_stat(self.val_loss_label, loss_label.item())
-
-    @rank_zero_only
-    def on_validation_end(self):
-        mlflow.log_metrics({
-            "val_loss": self.val_loss,
-            "val_loss_disamb": self.val_loss_disamb,
-            "val_loss_disamb_obj": self.val_loss_disamb_obj,
-            "val_loss_act": self.val_loss_act,
-            "val_loss_is_req": self.val_loss_is_req,
-            "val_loss_slots": self.val_loss_slots,
-            "val_loss_label": self.val_loss_label
-        }, step=self.global_rank)
-
-        log_model = True 
-
-        if self.max_val_loss:
-            if self.max_val_loss < self.val_loss:
-                log_model = False
-
-        if log_model:
-            self.max_val_loss = self.val_loss
-            print("new best model (val_loss: {:.4f})".format(self.val_loss))
-            mlflow.pytorch.log_model(self.model, "model")
-        else:
-            print("model improve failed (cur: {:.4f}, best: {:.4f})".format(self.val_loss, self.max_val_loss))
-            
+        self.log("val_loss", loss.item(), prog_bar=True)
+        self.log("val_loss_disamb", loss_disamb.item())
+        self.log("val_loss_disamb_obj", loss_disamb_obj.item())
+        self.log("val_loss_act", loss_act.item())
+        self.log("val_loss_is_req", loss_is_req.item())
+        self.log("val_loss_slots", loss_slots.item())
+        self.log("val_loss_label", loss_label.item())
 
     def configure_optimizers(self):
         low_lr_parameters = [

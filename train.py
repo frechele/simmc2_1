@@ -7,30 +7,40 @@ import pytorch_lightning.callbacks as plc
 import mlflow
 import mlflow.pytorch
 
+from simmc.engine.logger import MLflowLogger
+
 
 MLFLOW_TRACKING_URI = "http://localhost:5000"
 
 
 @gin.configurable(denylist=["args"])
 def train(args, engine, experiment_name: str):
-    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    mlflow.set_experiment(experiment_name)
+    mlflow_logger = MLflowLogger(experiment_name, MLFLOW_TRACKING_URI, engine)
 
-    mlflow.pytorch.log_model(engine.model, "model")
-    mlflow.log_artifact(args.config)
-
+    checkpoint_callback = plc.ModelCheckpoint(
+        verbose=True,
+        save_top_k=3,
+        monitor="val_loss",
+        mode="min"
+    )
+    
     swa_callback = plc.StochasticWeightAveraging(swa_lrs=1e-2)
+
 
     trainer_args = {
         "precision": 16,
         "gradient_clip_val": 1.0,
-        "callbacks": [swa_callback],
+        "logger": mlflow_logger,
+        "callbacks": [checkpoint_callback, swa_callback],
     }
 
     trainer = pl.Trainer.from_argparse_args(args,
         **trainer_args
     )
-    trainer.fit(engine)
+
+    mlflow.pytorch.autolog()
+    with mlflow.start_run() as run:
+        trainer.fit(engine)
 
 
 if __name__ == "__main__":
