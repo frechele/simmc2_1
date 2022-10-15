@@ -16,7 +16,6 @@ def train(args, engine, experiment_name: str):
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     mlflow.set_experiment(experiment_name)
 
-    mlflow.pytorch.autolog()
     mlflow.pytorch.log_model(engine.model, "model")
     mlflow.log_artifact(args.config)
 
