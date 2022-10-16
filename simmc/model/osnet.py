@@ -21,9 +21,12 @@ class OSBlock(nn.Module):
         self.w_kv = nn.Linear(embed_dim, embed_dim * 2, bias=False)
         self.scale = embed_dim ** -0.5
 
+        self.norm1 = nn.LayerNorm(embed_dim)
+        self.norm2 = nn.LayerNorm(embed_dim)
+
         self.ffn = nn.Sequential(
             nn.Linear(embed_dim, embed_dim * 4),
-            nn.ReLU(),
+            nn.GELU(),
             nn.Dropout(p=dropout),
             nn.Linear(embed_dim * 4, embed_dim),
         )
@@ -53,7 +56,8 @@ class OSBlock(nn.Module):
         out = torch.einsum("boh, bohi -> bohi", attn, value)
         out = out.view(batch_size, object_size, -1)
 
-        out = self.ffn(out) + objects
+        out = self.norm1(out + objects)
+        out = self.norm2(self.ffn(out) + out)
 
         return out
 

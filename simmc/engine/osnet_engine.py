@@ -35,6 +35,18 @@ class collate_fn:
         return { k: proc(k) for k in samples[0] }
 
 
+def focal_loss(inputs: torch.Tensor, targets: torch.Tensor, alpha: float = 0.25, gamma: float = 2):
+    p = torch.sigmoid(inputs)
+    p_t = p * targets + (1 - p) * (1 - targets)
+
+    loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction="none") * ((1. - p_t) ** gamma)
+
+    alpha_t = alpha * targets + (1 - alpha) * (1 - targets)
+    loss = alpha_t * loss
+
+    return loss.mean()
+
+
 @gin.configurable
 class OSNetEngine(pl.LightningModule):
     def __init__(self, train_dataset: str, val_dataset: str,
@@ -79,14 +91,14 @@ class OSNetEngine(pl.LightningModule):
 
         outputs = self.model(context, objects, object_masks)
 
-        loss_disamb = F.binary_cross_entropy_with_logits(outputs.disamb, disamb)
-        loss_disamb_obj = F.binary_cross_entropy_with_logits(outputs.disamb_objs, disamb_objects)
+        loss_disamb = focal_loss(outputs.disamb, disamb)
+        loss_disamb_obj = focal_loss(outputs.disamb_objs, disamb_objects)
 
         loss_act = F.cross_entropy(outputs.acts, acts)
-        loss_is_req = F.binary_cross_entropy_with_logits(outputs.is_request, is_req)
-        loss_slots = F.binary_cross_entropy_with_logits(outputs.slots, slots)
+        loss_is_req = focal_loss(outputs.is_request, is_req)
+        loss_slots = focal_loss(outputs.slots, slots)
 
-        loss_label = -torch.mean(labels * torch.log_softmax(outputs.objects, dim=-1))
+        loss_label = focal_loss(outputs.objects, labels)
 
         loss = loss_label + loss_disamb + loss_disamb_obj + loss_act + loss_is_req + loss_slots
 
@@ -124,7 +136,7 @@ class OSNetEngine(pl.LightningModule):
         loss_is_req = F.binary_cross_entropy_with_logits(outputs.is_request, is_req)
         loss_slots = F.binary_cross_entropy_with_logits(outputs.slots, slots)
 
-        loss_label = -torch.mean(labels * torch.log_softmax(outputs.objects, dim=-1))
+        loss_label = F.binary_cross_entropy_with_logits(outputs.objects, labels)
 
         loss = loss_label + loss_disamb + loss_disamb_obj + loss_act + loss_is_req + loss_slots
 
