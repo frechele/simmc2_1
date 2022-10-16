@@ -34,15 +34,16 @@ class Predictor:
     def predict(self, context, objects, object_ids, metadata):
         context = self.tokenizer([context], padding=True, truncation=True, return_tensors="pt").to(device)
         objects = torch.FloatTensor(np.stack(objects)).unsqueeze(0).to(device)
+        object_masks = torch.ones(1, objects.shape[1]).bool().to(device)
 
-        output = self.net(context, objects)
+        output = self.net(context, objects, object_masks)
 
         # subtask 2
         disamb = output.disamb.item() > 0
 
         disamb_objs = []
         if disamb:
-            disamb_obj = calc_object_similarity(output.context_proj, output.disamb_proj).squeeze(0).cpu().numpy()
+            disamb_obj = output.disamb_objs.squeeze()
 
             for i, obj_id in enumerate(object_ids):
                 if disamb_obj[i] > 0:
@@ -64,7 +65,7 @@ class Predictor:
         slot_values = []
         objects = []
         if not is_req:
-            objects_proj = calc_object_similarity(output.context_proj, output.object_proj).squeeze(0).cpu().numpy()
+            objects_proj = output.objects.squeeze()
             for i, obj_id in enumerate(object_ids):
                 if objects_proj[i] > 0:
                     objects.append(obj_id)
