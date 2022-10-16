@@ -17,6 +17,8 @@ MLFLOW_TRACKING_URI = "http://localhost:5000"
 def train(args, engine, experiment_name: str):
     mlflow_logger = MLflowLogger(experiment_name, MLFLOW_TRACKING_URI, engine)
 
+    mlflow.log_artifact(args.config)
+
     checkpoint_callback = plc.ModelCheckpoint(
         verbose=True,
         save_top_k=3,
@@ -25,7 +27,6 @@ def train(args, engine, experiment_name: str):
     )
     
     swa_callback = plc.StochasticWeightAveraging(swa_lrs=1e-2)
-
 
     trainer_args = {
         "precision": 16,
@@ -38,7 +39,6 @@ def train(args, engine, experiment_name: str):
         **trainer_args
     )
 
-    mlflow.pytorch.autolog()
     with mlflow.start_run() as run:
         trainer.fit(engine)
 
