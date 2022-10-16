@@ -56,6 +56,7 @@ class OSDataset(Dataset):
         labels = self.labels[index]
         labels_ = np.zeros(objects.shape[0])
         labels_[labels] = 1
+        label_exists = (labels_.sum() > 0)
 
         return {
             "context": context,
@@ -70,6 +71,7 @@ class OSDataset(Dataset):
             "slots": torch.FloatTensor(slots),
 
             "labels": torch.LongTensor(labels_),
+            "object_exists": torch.tensor(label_exists).float().unsqueeze(-1)
         }
 
 

@@ -2,6 +2,7 @@ from collections import namedtuple
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from transformers import AlbertModel
 
@@ -66,22 +67,20 @@ class OSTransformer(nn.Module):
     def __init__(self, embed_dim: int, num_heads: int):
         super(OSTransformer, self).__init__()
 
-        self.blocks = nn.ModuleList([
-            OSBlock(embed_dim, num_heads, dropout=0.2) for _ in range(3)
-            ])
+        self.block = OSBlock(embed_dim, num_heads, dropout=0.2)
+        self.blocks = 8
 
     def forward(self, context: torch.Tensor, objects: torch.Tensor, object_mask: torch.Tensor):
         path = objects 
-        attn = None
 
-        for block in self.blocks:
-            path = block(context, path, object_mask)
+        for block in range(self.blocks):
+            path = self.block(context, path, object_mask)
 
         return path
 
 
 OSNetOutput = namedtuple("OSNetOutput",
-    ["objects", "disamb", "disamb_objs", "acts", "is_request", "slots"])
+    ["object_exists", "objects", "disamb", "disamb_objs", "acts", "is_request", "slots"])
 
 # Object Sentence network
 class OSNet(nn.Module):
@@ -109,6 +108,7 @@ class OSNet(nn.Module):
 
         self.os_trans = OSTransformer(self.projection_dim, 8)
 
+        self.object_classifier = nn.Linear(self.projection_dim, 1)
         self.object_head = nn.Linear(self.projection_dim, self.projection_dim)
 
         self.disamb_classifier = nn.Linear(self.projection_dim, 1)
@@ -127,6 +127,8 @@ class OSNet(nn.Module):
 
         object_proj = self.os_trans(context_proj, object_feat, object_mask)
 
+        object_exists = self.object_classifier(context_proj)
+
         objects = self.object_head(object_proj)
         objects = calc_object_similarity(context_proj, objects)
         objects.masked_fill_(object_mask, -1e4)
@@ -142,6 +144,7 @@ class OSNet(nn.Module):
         slot = self.slot_classifier(context_proj)
 
         return OSNetOutput(
+            object_exists=object_exists,
             objects=objects,
             disamb=disamb,
             disamb_objs=disamb_objs,
@@ -152,8 +155,7 @@ class OSNet(nn.Module):
 
 
 def calc_object_similarity(context: torch.Tensor, objects: torch.Tensor):
-    sim = torch.einsum("bc,boc->bo", context, objects)
-    return sim
+    return F.cosine_similarity(context.unsqueeze(1).expand_as(objects), objects, dim=-1) * 10 
 
 
 if __name__ == "__main__":

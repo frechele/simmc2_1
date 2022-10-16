@@ -35,7 +35,7 @@ class collate_fn:
         return { k: proc(k) for k in samples[0] }
 
 
-def focal_loss(inputs: torch.Tensor, targets: torch.Tensor, alpha: float = 0.25, gamma: float = 2):
+def focal_loss(inputs: torch.Tensor, targets: torch.Tensor, alpha: float = 0.25, gamma: float = 2, reduce: bool = True):
     p = torch.sigmoid(inputs)
     p_t = p * targets + (1 - p) * (1 - targets)
 
@@ -44,7 +44,9 @@ def focal_loss(inputs: torch.Tensor, targets: torch.Tensor, alpha: float = 0.25,
     alpha_t = alpha * targets + (1 - alpha) * (1 - targets)
     loss = alpha_t * loss
 
-    return loss.mean()
+    if reduce:
+        return loss.mean()
+    return loss
 
 
 @gin.configurable
@@ -87,20 +89,25 @@ class OSNetEngine(pl.LightningModule):
         is_req = batch["is_request"]
         slots = batch["slots"].float()
 
+        object_exists = batch["object_exists"].float()
         labels = batch["labels"].float()
 
         outputs = self.model(context, objects, object_masks)
 
         loss_disamb = focal_loss(outputs.disamb, disamb)
-        loss_disamb_obj = focal_loss(outputs.disamb_objs, disamb_objects)
+
+        loss_disamb_obj = focal_loss(outputs.disamb_objs, disamb_objects, reduce=False)
+        loss_disamb_obj = (loss_disamb_obj * disamb.unsqueeze(-1)).mean()
 
         loss_act = F.cross_entropy(outputs.acts, acts)
         loss_is_req = focal_loss(outputs.is_request, is_req)
         loss_slots = focal_loss(outputs.slots, slots)
 
-        loss_label = focal_loss(outputs.objects, labels)
+        loss_object_exists = focal_loss(outputs.object_exists, object_exists)
+        loss_label = focal_loss(outputs.objects, labels, reduce=False)
+        loss_label = (loss_label * object_exists.unsqueeze(-1)).mean()
 
-        loss = loss_label + loss_disamb + loss_disamb_obj + loss_act + loss_is_req + loss_slots
+        loss = loss_object_exists + loss_label + loss_disamb + loss_disamb_obj + loss_act + loss_is_req + loss_slots
 
         self.log("train_loss", loss.item())
         self.log("train_loss_disamb", loss_disamb.item())
@@ -108,6 +115,7 @@ class OSNetEngine(pl.LightningModule):
         self.log("train_loss_act", loss_act.item())
         self.log("train_loss_is_req", loss_is_req.item())
         self.log("train_loss_slots", loss_slots.item())
+        self.log("train_loss_object_exists", loss_object_exists.item())
         self.log("train_loss_label", loss_label.item())
 
         return loss
@@ -124,21 +132,25 @@ class OSNetEngine(pl.LightningModule):
         is_req = batch["is_request"]
         slots = batch["slots"].float()
 
+        object_exists = batch["object_exists"].float()
         labels = batch["labels"].float()
 
         outputs = self.model(context, objects, object_masks)
 
         loss_disamb = F.binary_cross_entropy_with_logits(outputs.disamb, disamb)
 
-        loss_disamb_obj = F.binary_cross_entropy_with_logits(outputs.disamb_objs, disamb_objects)
+        loss_disamb_obj = F.binary_cross_entropy_with_logits(outputs.disamb_objs, disamb_objects, reduce=False)
+        loss_disamb_obj = (loss_disamb_obj * disamb.unsqueeze(-1)).mean()
 
         loss_act = F.cross_entropy(outputs.acts, acts)
         loss_is_req = F.binary_cross_entropy_with_logits(outputs.is_request, is_req)
         loss_slots = F.binary_cross_entropy_with_logits(outputs.slots, slots)
 
-        loss_label = F.binary_cross_entropy_with_logits(outputs.objects, labels)
+        loss_object_exists = F.binary_cross_entropy_with_logits(outputs.object_exists, object_exists)
+        loss_label = F.binary_cross_entropy_with_logits(outputs.objects, labels, reduce=False)
+        loss_label = (loss_label * object_exists.unsqueeze(-1)).mean()
 
-        loss = loss_label + loss_disamb + loss_disamb_obj + loss_act + loss_is_req + loss_slots
+        loss = loss_object_exists + loss_label + loss_disamb + loss_disamb_obj + loss_act + loss_is_req + loss_slots
 
         self.log("val_loss", loss.item(), prog_bar=True)
         self.log("val_loss_disamb", loss_disamb.item())
