@@ -69,32 +69,24 @@ class OSNetEngine(pl.LightningModule):
         object_masks = batch["object_masks"]
 
         disamb = batch["disamb"]
-        disamb_objects = batch["disamb_objects"]
+        disamb_objects = batch["disamb_objects"].float()
 
         acts = batch["acts"]
         is_req = batch["is_request"]
-        slots = batch["slots"]
+        slots = batch["slots"].float()
 
-        labels = batch["labels"]
+        labels = batch["labels"].float()
 
-        outputs = self.model(context, objects)
-
-        pred_label = calc_object_similarity(outputs.context_proj, outputs.object_proj)
-        pred_label.masked_fill_(object_masks, -1e4)
-
-        pred_disambs = calc_object_similarity(outputs.context_proj, outputs.disamb_proj)
-        pred_disambs.masked_fill_(object_masks, -1e4)
+        outputs = self.model(context, objects, object_masks)
 
         loss_disamb = F.binary_cross_entropy_with_logits(outputs.disamb, disamb)
-        loss_disamb_obj = F.multilabel_soft_margin_loss(pred_disambs, disamb_objects, reduce=False)
-        loss_disamb_obj = loss_disamb_obj * disamb.unsqueeze(-1)
-        loss_disamb_obj = loss_disamb_obj.mean()
+        loss_disamb_obj = F.binary_cross_entropy_with_logits(outputs.disamb_objs, disamb_objects)
 
         loss_act = F.cross_entropy(outputs.acts, acts)
         loss_is_req = F.binary_cross_entropy_with_logits(outputs.is_request, is_req)
-        loss_slots = F.multilabel_soft_margin_loss(outputs.slots, slots)
+        loss_slots = F.binary_cross_entropy_with_logits(outputs.slots, slots)
 
-        loss_label = F.multilabel_soft_margin_loss(pred_label, labels)
+        loss_label = -torch.mean(labels * torch.log_softmax(outputs.objects, dim=-1))
 
         loss = loss_label + loss_disamb + loss_disamb_obj + loss_act + loss_is_req + loss_slots
 
@@ -114,32 +106,25 @@ class OSNetEngine(pl.LightningModule):
         object_masks = batch["object_masks"]
 
         disamb = batch["disamb"]
-        disamb_objects = batch["disamb_objects"]
+        disamb_objects = batch["disamb_objects"].float()
 
         acts = batch["acts"]
         is_req = batch["is_request"]
-        slots = batch["slots"]
+        slots = batch["slots"].float()
 
-        labels = batch["labels"]
+        labels = batch["labels"].float()
 
-        outputs = self.model(context, objects)
-
-        pred_label = calc_object_similarity(outputs.context_proj, outputs.object_proj)
-        pred_label.masked_fill_(object_masks, -1e4)
-
-        pred_disambs = calc_object_similarity(outputs.context_proj, outputs.disamb_proj)
-        pred_disambs.masked_fill_(object_masks, -1e4)
+        outputs = self.model(context, objects, object_masks)
 
         loss_disamb = F.binary_cross_entropy_with_logits(outputs.disamb, disamb)
-        loss_disamb_obj = F.multilabel_soft_margin_loss(pred_disambs, disamb_objects, reduce=False)
-        loss_disamb_obj = loss_disamb_obj * disamb.unsqueeze(-1)
-        loss_disamb_obj = loss_disamb_obj.mean()
+
+        loss_disamb_obj = F.binary_cross_entropy_with_logits(outputs.disamb_objs, disamb_objects)
 
         loss_act = F.cross_entropy(outputs.acts, acts)
         loss_is_req = F.binary_cross_entropy_with_logits(outputs.is_request, is_req)
-        loss_slots = F.multilabel_soft_margin_loss(outputs.slots, slots)
+        loss_slots = F.binary_cross_entropy_with_logits(outputs.slots, slots)
 
-        loss_label = F.multilabel_soft_margin_loss(pred_label, labels)
+        loss_label = -torch.mean(labels * torch.log_softmax(outputs.objects, dim=-1))
 
         loss = loss_label + loss_disamb + loss_disamb_obj + loss_act + loss_is_req + loss_slots
 
@@ -153,18 +138,10 @@ class OSNetEngine(pl.LightningModule):
 
     def configure_optimizers(self):
         low_lr_parameters = [
-            self.model.bert
         ]
 
         high_lr_parameters = [
-            self.model.context_proj,
-            self.model.object_feat,
-            self.model.object_proj,
-            self.model.disamb_classifier,
-            self.model.disamb_proj,
-            self.model.act_classifier,
-            self.model.is_req_classifier,
-            self.model.slot_classifier
+            self.model
         ]
 
         opt_elements = []
