@@ -39,8 +39,7 @@ def train(args, engine, experiment_name: str):
         **trainer_args
     )
 
-    with mlflow.start_run() as run:
-        trainer.fit(engine)
+    trainer.fit(engine)
 
 
 if __name__ == "__main__":
