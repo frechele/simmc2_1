@@ -88,8 +88,6 @@ class OSNet(nn.Module):
         super(OSNet, self).__init__()
 
         self.bert = AlbertModel.from_pretrained("albert-base-v2")
-        for p in self.bert.parameters():
-            p.requires_grad = False
 
         self.projection_dim = 256 
 
@@ -155,7 +153,7 @@ class OSNet(nn.Module):
 
 
 def calc_object_similarity(context: torch.Tensor, objects: torch.Tensor):
-    return F.cosine_similarity(context.unsqueeze(1).expand_as(objects), objects, dim=-1) * 10 
+    return F.cosine_similarity(context.unsqueeze(1).expand_as(objects), objects, dim=-1) * 100
 
 
 if __name__ == "__main__":

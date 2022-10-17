@@ -158,14 +158,25 @@ class OSNetEngine(pl.LightningModule):
         self.log("val_loss_act", loss_act.item())
         self.log("val_loss_is_req", loss_is_req.item())
         self.log("val_loss_slots", loss_slots.item())
+        self.log("val_loss_object_exists", loss_object_exists.item())
         self.log("val_loss_label", loss_label.item())
 
     def configure_optimizers(self):
         low_lr_parameters = [
+            self.model.bert
         ]
 
         high_lr_parameters = [
-            self.model
+            self.model.context_proj,
+            self.model.object_feat,
+            self.model.os_trans,
+            self.model.object_classifier,
+            self.model.object_head,
+            self.model.disamb_classifier,
+            self.model.disamb_head,
+            self.model.act_classifier,
+            self.model.is_req_classifier,
+            self.model.slot_classifier
         ]
 
         opt_elements = []

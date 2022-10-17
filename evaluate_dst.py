@@ -62,9 +62,11 @@ class Predictor:
                 else:
                     slots.append(L.SLOT_KEY[i])
 
+        object_exists = output.object_exists.item() > 0
+
         slot_values = []
         objects = []
-        if not is_req:
+        if not is_req and object_exists:
             objects_proj = output.objects.squeeze()
             for i, obj_id in enumerate(object_ids):
                 if objects_proj[i] > 0:
