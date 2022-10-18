@@ -1,4 +1,5 @@
 import argparse
+from collections import defaultdict
 import json
 import pickle
 from tqdm import tqdm
@@ -19,27 +20,7 @@ FIELDNAME_DISAMB_OBJS = "disambiguation_candidates"
 
 
 def convert(dialogues, scenes, len_context):
-    results = {
-        "dialogue_idx": [],
-        "turn_idx": [],
-
-        "context": [],
-        "objects": [],
-        "object_ids": [],
-
-        "raw_metadata": [],
-
-        # subtask 2 outputs
-        "disamb": [],
-        "disamb_objects": [],
-
-        # subtask 3 outputs
-        "acts": [],
-        "is_request": [],
-        "slots": [],
-
-        "labels": []
-    }
+    results = defaultdict(list)
 
     max_objects = 0
     for dialogue_data in tqdm(dialogues):
@@ -72,9 +53,9 @@ def convert(dialogues, scenes, len_context):
 
             context = ""
             if prev_asst_uttr:
-                context += f"System : {prev_asst_uttr} "
+                context += f"{L.SYSTEM_UTTR_TOKEN} {prev_asst_uttr} "
 
-            context += f"User : {user_uttr}"
+            context += f"{L.USER_UTTR_TOKEN} {user_uttr}"
             prev_asst_uttr = asst_uttr
 
             lst_context.append(context)
@@ -85,8 +66,7 @@ def convert(dialogues, scenes, len_context):
 
             results["context"].append(context)
 
-            objs = [id_to_idx[obj_id] for obj_id in user_belief["act_attributes"]["objects"]]
-            results["objects"].append(object_map)
+            results["object_map"].append(object_map)
             results["object_ids"].append(list(id_to_idx.keys()))
             results["raw_metadata"].append(raw_metadata)
 
@@ -98,21 +78,30 @@ def convert(dialogues, scenes, len_context):
             # subtask 3 outputs
             results["acts"].append(L.ACTION_MAPPING_TABLE[user_belief["act"]])
 
-            is_request = len(user_belief["act_attributes"]["request_slots"]) > 0
-            results["is_request"].append(is_request)
-
-            if is_request:
-                slots = user_belief["act_attributes"]["request_slots"]
+            request_slots = user_belief["act_attributes"]["request_slots"]
+            if len(request_slots) == 0:
+                request_slots = np.zeros(len(L.SLOT_KEY_MAPPING_TABLE))
             else:
+                request_slots = labels_to_vector(request_slots, L.SLOT_KEY_MAPPING_TABLE)
+            results["request_slots"].append(request_slots)
+
+            objs = [id_to_idx[obj_id] for obj_id in user_belief["act_attributes"]["objects"]]
+            results["objects"].append(objs)
+
+            slot_values = []
+            slot_query = np.zeros(len(L.SLOT_KEY_MAPPING_TABLE))
+            if len(objs) == 0 and user_belief["act"] != "INFORM:REFINE":
+                # slot-value can be filled with only utterance
+                for k, v in user_belief["act_attributes"]["slot_values"].items():
+                    slot_values.append([k, str(v).strip()])
+            else:
+                # slot-value can be filled with utterance and metadata
                 slots = list(user_belief["act_attributes"]["slot_values"].keys())
-            
-            if len(slots) == 0:
-                slots = np.zeros(len(L.SLOT_KEY_MAPPING_TABLE))
-            else:
-                slots = labels_to_vector(slots, L.SLOT_KEY_MAPPING_TABLE)
-            results["slots"].append(slots)
 
-            results["labels"].append(objs)
+                if len(slots) > 0:
+                    slot_query = labels_to_vector(slots, L.SLOT_KEY_MAPPING_TABLE)
+            results["slot_values"].append(slot_values)
+            results["slot_query"].append(slot_query)
 
     print("max objects:", max_objects)
 

@@ -37,46 +37,49 @@ if __name__ == "__main__":
     outputs = dict()
 
     for idx in range(len(data["dialogue_idx"])):
-        dialogue_idx = data["dialogue_idx"][idx]
-        turn_idx = data["turn_idx"][idx]
+        inp_dialogue_idx = data["dialogue_idx"][idx]
+        inp_turn_idx = data["turn_idx"][idx]
 
-        context = data["context"][idx]
-        objects = data["objects"][idx]
-        object_ids = data["object_ids"][idx]
-        metadata = data["raw_metadata"][idx]
+        inp_context = data["context"][idx]
+        inp_objects = data["object_map"][idx]
+        inp_object_ids = data["object_ids"][idx]
+        inp_metadata = data["raw_metadata"][idx]
 
         # subtask 2
         disamb = data["disamb"][idx]
         disamb_objs = []
         if disamb:
             for obj_id in data["disamb_objects"][idx]:
-                disamb_objs.append(data["object_ids"][obj_id])
+                disamb_objs.append(data["object_ids"][idx][obj_id])
 
         # subtask 3
         act = L.ACTION[data["acts"][idx]]
-        is_req = data["is_request"][idx]
 
         request_slots = []
-        slots = []
-        for i, slot in enumerate(data["slots"][idx]):
+        for i, slot in enumerate(data["request_slots"][idx]):
             if slot > 0:
-                if is_req:
-                    request_slots.append(L.SLOT_KEY[i])
-                else:
-                    slots.append(L.SLOT_KEY[i])
+                request_slots.append(L.SLOT_KEY[i])
 
         slot_values = []
         objects = []
-        if not is_req:
-            for obj_id in data["labels"][idx]:
-                objects.append(data["object_ids"][idx][obj_id])
+        for obj_id in data["objects"][idx]:
+            objects.append(inp_object_ids[obj_id])
+
+        if act == "INFORM:GET":
+            slots = []
+            for i, slot in enumerate(data["slot_query"][idx]):
+                if slot > 0:
+                    slots.append(L.SLOT_KEY[i])
 
             for obj_id in objects:
                 for slot in slots:
-                    if obj_id in metadata and slot in metadata[obj_id]:
-                        slot_values.append((slot, metadata[obj_id][slot]))
+                    if obj_id in inp_metadata and slot in inp_metadata[obj_id]:
+                        slot_values.append((slot, inp_metadata[obj_id][slot]))
 
-        belief_state = "{act} [ {slot_values} ] ({request_slots}) < {objects} > | {disamb_candidates} |".format(
+        else:
+            slot_values = data["slot_values"][idx]
+
+        belief_state = "{act} [ {slot_values} ] ({request_slots}) < {object} > | {disamb_candidates} |".format(
             act=act,
             slot_values=", ".join(
                 [
@@ -87,7 +90,7 @@ if __name__ == "__main__":
             request_slots=", ".join(
                 request_slots
             ),
-            objects=", ".join(
+            object=", ".join(
                 list(map(str, objects))
             ),
             disamb_candidates=", ".join(
@@ -95,8 +98,8 @@ if __name__ == "__main__":
             )
         )
 
-        outputs[(dialogue_idx, turn_idx)] = TEMPLATE_TARGET.format(
-            context=context,
+        outputs[(inp_dialogue_idx, inp_turn_idx)] = TEMPLATE_TARGET.format(
+            context=inp_context,
             START_BELIEF_STATE=START_BELIEF_STATE,
             belief_state=belief_state,
             END_OF_BELIEF=END_OF_BELIEF,
