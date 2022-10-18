@@ -203,3 +203,6 @@ SLOT_KEY, SLOT_KEY_MAPPING_TABLE = _make_mapping_table([
     "price",
     "type"
 ])
+
+SYSTEM_UTTR_TOKEN = "<SYSU>"
+USER_UTTR_TOKEN = "<USRU>"

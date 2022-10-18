@@ -4,10 +4,20 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from transformers import AlbertModel
+from transformers import AlbertModel, AlbertTokenizer
 
 from simmc.data.preprocess import OBJECT_FEATURE_SIZE
 import simmc.data.labels as L
+
+
+BERT_MODEL_NAME = "albert-base-v2"
+
+
+def create_tokenizer():
+    tokenizer = AlbertTokenizer.from_pretrained(BERT_MODEL_NAME)
+    tokenizer.add_special_tokens({"additional_special_tokens": [L.USER_UTTR_TOKEN, L.SYSTEM_UTTR_TOKEN]})
+
+    return tokenizer
 
 
 class OSBlock(nn.Module):
@@ -87,7 +97,7 @@ class OSNet(nn.Module):
     def __init__(self):
         super(OSNet, self).__init__()
 
-        self.bert = AlbertModel.from_pretrained("albert-base-v2")
+        self.bert = AlbertModel.from_pretrained(BERT_MODEL_NAME)
 
         self.projection_dim = 256 
 

@@ -13,15 +13,13 @@ from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 import mlflow
 import mlflow.pytorch
 
-from transformers import AlbertTokenizer
-
 from simmc.data.os_dataset import OSDataset
-from simmc.model.osnet import OSNet, calc_object_similarity
+from simmc.model.osnet import create_tokenizer, OSNet, calc_object_similarity
 
 
 class collate_fn:
     def __init__(self):
-        self.tokenizer = AlbertTokenizer.from_pretrained("albert-base-v2")
+        self.tokenizer = create_tokenizer()
 
     def __call__(self, samples):
         def proc(key):

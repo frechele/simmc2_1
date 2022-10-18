@@ -5,10 +5,8 @@ import numpy as np
 
 import torch
 
-from transformers import AlbertTokenizer
-
 import simmc.data.labels as L
-from simmc.model.osnet import OSNet, calc_object_similarity
+from simmc.model.osnet import create_tokenizer, OSNet, calc_object_similarity
 
 
 START_BELIEF_STATE = "=> Belief State :"
@@ -28,7 +26,7 @@ class Predictor:
     def __init__(self, net: OSNet):
         self.net = net
 
-        self.tokenizer = AlbertTokenizer.from_pretrained("albert-base-v2")
+        self.tokenizer = create_tokenizer()
 
     @torch.no_grad()
     def predict(self, context, objects, object_ids, metadata):
