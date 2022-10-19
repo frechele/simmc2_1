@@ -22,6 +22,7 @@ FIELDNAME_DISAMB_OBJS = "disambiguation_candidates"
 def convert(dialogues, scenes, len_context):
     results = defaultdict(list)
 
+    act_set = set()
     max_objects = 0
     for dialogue_data in tqdm(dialogues):
         prev_asst_uttr = None
@@ -103,7 +104,11 @@ def convert(dialogues, scenes, len_context):
             results["slot_values"].append(slot_values)
             results["slot_query"].append(slot_query)
 
+            if slot_query.sum() > 0 and len(objs) > 0:
+                act_set.add(user_belief["act"])
+
     print("max objects:", max_objects)
+    print(act_set)
 
     return results
 

@@ -29,12 +29,12 @@ class Predictor:
         self.tokenizer = create_tokenizer()
 
     @torch.no_grad()
-    def predict(self, context, objects, object_ids, metadata):
+    def predict(self, context, object_map, object_ids, metadata):
         context = self.tokenizer([context], padding=True, truncation=True, return_tensors="pt").to(device)
-        objects = torch.FloatTensor(np.stack(objects)).unsqueeze(0).to(device)
-        object_masks = torch.ones(1, objects.shape[1]).bool().to(device)
+        object_map = torch.FloatTensor(np.stack(object_map)).unsqueeze(0).to(device)
+        object_masks = torch.ones(1, object_map.shape[1]).bool().to(device)
 
-        output = self.net(context, objects, object_masks)
+        output = self.net(context, object_map, object_masks)
 
         # subtask 2
         disamb = output.disamb.item() > 0
@@ -49,32 +49,29 @@ class Predictor:
 
         # subtask 3
         act = L.ACTION[output.acts.argmax(dim=1).item()]
-        is_req = output.is_request.item() > 0
 
         request_slots = []
-        slots = []
-        for i, slot in enumerate(output.slots.cpu().numpy()[0]):
+        for i, slot in enumerate(output.request_slot.cpu().numpy()[0]):
             if slot > 0:
-                if is_req:
-                    request_slots.append(L.SLOT_KEY[i])
-                else:
-                    slots.append(L.SLOT_KEY[i])
+                request_slots.append(L.SLOT_KEY[i])
 
-        object_exists = output.object_exists.item() > 0
+        objects = []
+        objects_sim = output.objects.squeeze()
+        for i, obj_id in enumerate(object_ids):
+            if objects_sim[i] > 0:
+                objects.append(obj_id)
 
         slot_values = []
-        objects = []
-        if not is_req and object_exists:
-            objects_proj = output.objects.squeeze()
-            for i, obj_id in enumerate(object_ids):
-                if objects_proj[i] > 0:
-                    objects.append(obj_id)
+        if act == "INFORM:GET":
+            slots = []
+            for i, slot in enumerate(output.slot_query.cpu().numpy()[0]):
+                if slot > 0:
+                    slots.append(L.SLOT_KEY[i])
 
             for obj_id in objects:
                 for slot in slots:
                     if obj_id in metadata and slot in metadata[obj_id]:
-                        slot_values.append([slot, metadata[obj_id][slot]])
-
+                        slot_values.append((slot, metadata[obj_id][slot]))
 
         belief_state = "{act} [ {slot_values} ] ({request_slots}) < {objects} > | {disamb_candidates} |".format(
             act=act,
@@ -127,11 +124,11 @@ if __name__ == "__main__":
         turn_idx = data["turn_idx"][idx]
 
         context = data["context"][idx]
-        objects = data["objects"][idx]
+        object_map = data["object_map"][idx]
         object_ids = data["object_ids"][idx]
         metadata = data["raw_metadata"][idx]
 
-        str_belief_state = predictor.predict(context, objects, object_ids, metadata)
+        str_belief_state = predictor.predict(context, object_map, object_ids, metadata)
 
         outputs[(dialogue_idx, turn_idx)] = TEMPLATE_TARGET.format(
             context=context,

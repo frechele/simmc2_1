@@ -1,3 +1,4 @@
+from requests import request
 import torch
 import pickle
 import numpy as np
@@ -15,7 +16,7 @@ class OSDataset(Dataset):
             data = pickle.load(f)
 
         self.context = data["context"]
-        self.objects = data["objects"]
+        self.object_map = data["object_map"]
 
         # subtask 2
         self.disamb = data["disamb"]
@@ -23,10 +24,10 @@ class OSDataset(Dataset):
 
         # subtask 3
         self.acts = data["acts"]
-        self.is_request = data["is_request"]
-        self.slots = data["slots"]
-
-        self.labels = data["labels"]
+        self.request_slots = data["request_slots"]
+        self.objects = data["objects"]
+        self.slot_values = data["slot_values"]
+        self.slot_query = data["slot_query"]
 
         self.object_padding = object_padding
 
@@ -36,42 +37,41 @@ class OSDataset(Dataset):
     def __getitem__(self, index: int):
         context = self.context[index]
 
-        objects = self.objects[index]
-        object_padding_len = max(0, self.object_padding - len(objects))
-        object_padding_mask = np.array([0] * len(objects) + [1] * object_padding_len)
-        objects += [np.zeros(OBJECT_FEATURE_SIZE)] * object_padding_len
-        objects = np.array(objects)
+        object_map = self.object_map[index]
+        object_padding_len = max(0, self.object_padding - len(object_map))
+        object_padding_mask = np.array([0] * len(object_map) + [1] * object_padding_len)
+        object_map += [np.zeros(OBJECT_FEATURE_SIZE)] * object_padding_len
+        object_map = np.array(object_map)
 
         # subtask 2
         disamb = self.disamb[index]
         disamb_objects = self.disamb_objects[index]
-        disamb_objects_ = np.zeros(objects.shape[0])
+        disamb_objects_ = np.zeros(object_map.shape[0])
         disamb_objects_[disamb_objects] = 1
 
         # subtask 3
         acts = self.acts[index]
-        is_request = int(self.is_request[index])
-        slots = self.slots[index]
+        request_slot = self.request_slots[index]
 
-        labels = self.labels[index]
-        labels_ = np.zeros(objects.shape[0])
-        labels_[labels] = 1
-        label_exists = (labels_.sum() > 0)
+        objects = self.objects[index]
+        objects_ = np.zeros(object_map.shape[0])
+        objects_[objects] = 1
+
+        slot_query = self.slot_query[index]
 
         return {
             "context": context,
-            "objects": torch.FloatTensor(objects),
+            "object_map": torch.FloatTensor(object_map),
             "object_masks": torch.BoolTensor(object_padding_mask),
 
             "disamb": torch.tensor(disamb).float().unsqueeze(-1),
             "disamb_objects": torch.LongTensor(disamb_objects_),
 
             "acts": torch.tensor(acts).long(),
-            "is_request": torch.tensor(is_request).float().unsqueeze(-1),
-            "slots": torch.FloatTensor(slots),
+            "request_slot": torch.FloatTensor(request_slot),
+            "objects": torch.FloatTensor(objects_),
 
-            "labels": torch.LongTensor(labels_),
-            "object_exists": torch.tensor(label_exists).float().unsqueeze(-1)
+            "slot_query": torch.FloatTensor(slot_query),
         }
 
 

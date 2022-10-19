@@ -77,20 +77,19 @@ class OSTransformer(nn.Module):
     def __init__(self, embed_dim: int, num_heads: int):
         super(OSTransformer, self).__init__()
 
-        self.block = OSBlock(embed_dim, num_heads, dropout=0.2)
-        self.blocks = 8
+        self.blocks = nn.ModuleList([OSBlock(embed_dim, num_heads, dropout=0.2) for _ in range(2)])
 
     def forward(self, context: torch.Tensor, objects: torch.Tensor, object_mask: torch.Tensor):
         path = objects 
 
-        for block in range(self.blocks):
-            path = self.block(context, path, object_mask)
+        for block in self.blocks:
+            path = block(context, path, object_mask)
 
         return path
 
 
 OSNetOutput = namedtuple("OSNetOutput",
-    ["object_exists", "objects", "disamb", "disamb_objs", "acts", "is_request", "slots"])
+    ["disamb", "disamb_objs", "acts", "request_slot", "objects", "slot_query"])
 
 # Object Sentence network
 class OSNet(nn.Module):
@@ -98,67 +97,56 @@ class OSNet(nn.Module):
         super(OSNet, self).__init__()
 
         self.bert = AlbertModel.from_pretrained(BERT_MODEL_NAME)
+        self.bert.resize_token_embeddings(self.bert.config.vocab_size + 2)
 
         self.projection_dim = 256 
 
-        self.context_proj = nn.Sequential(
-            nn.Linear(768, 512),
-            nn.Mish(inplace=True),
-            nn.Linear(512, self.projection_dim)
-        )
+        self.context_proj = nn.Linear(768, self.projection_dim)
 
         self.object_feat = nn.Sequential(
-            nn.Linear(OBJECT_FEATURE_SIZE, 128),
+            nn.Linear(OBJECT_FEATURE_SIZE, self.projection_dim),
             nn.Mish(inplace=True),
-            nn.Linear(128, 256),
-            nn.Mish(inplace=True)
         )
 
         self.os_trans = OSTransformer(self.projection_dim, 8)
 
-        self.object_classifier = nn.Linear(self.projection_dim, 1)
-        self.object_head = nn.Linear(self.projection_dim, self.projection_dim)
-
         self.disamb_classifier = nn.Linear(self.projection_dim, 1)
-        self.disamb_head = nn.Linear(self.projection_dim, self.projection_dim)
+        self.disamb_head = nn.Linear(self.projection_dim, 1)
 
         self.act_classifier = nn.Linear(self.projection_dim, len(L.ACTION))
-        self.is_req_classifier = nn.Linear(self.projection_dim, 1)
-        self.slot_classifier = nn.Linear(self.projection_dim, len(L.SLOT_KEY))
+        self.request_slot_classifier = nn.Linear(self.projection_dim, len(L.SLOT_KEY))
+        self.objects_head = nn.Linear(self.projection_dim, 1)
 
+        self.slot_query = nn.Linear(self.projection_dim, len(L.SLOT_KEY))
 
-    def forward(self, context_inputs: torch.Tensor, objects: torch.Tensor, object_mask: torch.Tensor):
+    def forward(self, context_inputs: torch.Tensor, object_map: torch.Tensor, object_mask: torch.Tensor):
         context_feat = self.bert(**context_inputs).last_hidden_state[:, 0, :]
-        object_feat = self.object_feat(objects)
+        object_feat = self.object_feat(object_map)
 
         context_proj = self.context_proj(context_feat)
-
         object_proj = self.os_trans(context_proj, object_feat, object_mask)
-
-        object_exists = self.object_classifier(context_proj)
-
-        objects = self.object_head(object_proj)
-        objects = calc_object_similarity(context_proj, objects)
-        objects.masked_fill_(object_mask, -1e4)
 
         disamb = self.disamb_classifier(context_proj)
 
-        disamb_objs = self.disamb_head(object_proj)
-        disamb_objs = calc_object_similarity(context_proj, disamb_objs)
+        disamb_objs = self.disamb_head(object_proj).squeeze(-1)
         disamb_objs.masked_fill_(object_mask, -1e4)
 
         act = self.act_classifier(context_proj)
-        is_req = self.is_req_classifier(context_proj)
-        slot = self.slot_classifier(context_proj)
+
+        request_slot = self.request_slot_classifier(context_proj)
+
+        objects = self.objects_head(object_proj).squeeze(-1)
+        objects.masked_fill_(object_mask, -1e4)
+
+        slot_query = self.slot_query(context_proj)
 
         return OSNetOutput(
-            object_exists=object_exists,
-            objects=objects,
             disamb=disamb,
             disamb_objs=disamb_objs,
             acts=act,
-            is_request=is_req,
-            slots=slot
+            request_slot=request_slot,
+            objects=objects,
+            slot_query=slot_query
         )
 
 
@@ -182,7 +170,7 @@ if __name__ == "__main__":
 
     context_inputs = tokenizer([data["context"]], padding=True, truncation=True, return_tensors="pt")
 
-    outputs = net(context_inputs, data["objects"].unsqueeze(0), data["object_masks"].unsqueeze(0))
+    outputs = net(context_inputs, data["object_map"].unsqueeze(0), data["object_masks"].unsqueeze(0))
     print(outputs)
 
     summary(net)

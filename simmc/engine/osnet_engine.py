@@ -49,7 +49,7 @@ def focal_loss(inputs: torch.Tensor, targets: torch.Tensor, alpha: float = 0.25,
 
 @gin.configurable
 class OSNetEngine(pl.LightningModule):
-    def __init__(self, train_dataset: str, val_dataset: str,
+    def __init__(self, train_dataset: str, val_dataset: str, act_ce_weight: str = None,
         batch_size: int = 32, lr: float = 1e-3, bert_lr: float = 1e-6, weight_decay: float = 1e-5):
         super(OSNetEngine, self).__init__()
 
@@ -57,6 +57,9 @@ class OSNetEngine(pl.LightningModule):
 
         self.train_dataset_path = train_dataset
         self.val_dataset_path = val_dataset
+
+        if act_ce_weight:
+            self.act_ce_weight = self.register_buffer("act_ce_weight", torch.load(act_ce_weight))
 
         self.batch_size = batch_size
         self.lr = lr
@@ -77,63 +80,62 @@ class OSNetEngine(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         context = batch["context"]
-        objects = batch["objects"]
+        object_map = batch["object_map"]
         object_masks = batch["object_masks"]
 
         disamb = batch["disamb"]
         disamb_objects = batch["disamb_objects"].float()
 
         acts = batch["acts"]
-        is_req = batch["is_request"]
-        slots = batch["slots"].float()
+        request_slot = batch["request_slot"].float()
+        objects = batch["objects"].float()
 
-        object_exists = batch["object_exists"].float()
-        labels = batch["labels"].float()
+        slot_query = batch["slot_query"].float()
 
-        outputs = self.model(context, objects, object_masks)
+        outputs = self.model(context, object_map, object_masks)
 
         loss_disamb = focal_loss(outputs.disamb, disamb)
 
         loss_disamb_obj = focal_loss(outputs.disamb_objs, disamb_objects, reduce=False)
         loss_disamb_obj = (loss_disamb_obj * disamb.unsqueeze(-1)).mean()
 
-        loss_act = F.cross_entropy(outputs.acts, acts)
-        loss_is_req = focal_loss(outputs.is_request, is_req)
-        loss_slots = focal_loss(outputs.slots, slots)
+        if hasattr(self, "act_ce_weight"):
+            loss_act = F.cross_entropy(outputs.acts, acts, weight=self.act_ce_weight, label_smoothing=0.1)
+        else:
+            loss_act = F.cross_entropy(outputs.acts, acts, label_smoothing=0.1)
+        loss_request_slot = focal_loss(outputs.request_slot, request_slot)
+        loss_objects = focal_loss(outputs.objects, objects)
 
-        loss_object_exists = focal_loss(outputs.object_exists, object_exists)
-        loss_label = focal_loss(outputs.objects, labels, reduce=False)
-        loss_label = (loss_label * object_exists.unsqueeze(-1)).mean()
+        loss_slot_query = focal_loss(outputs.slot_query, slot_query)
 
-        loss = loss_object_exists + loss_label + loss_disamb + loss_disamb_obj + loss_act + loss_is_req + loss_slots
+        loss = loss_disamb + loss_disamb_obj + \
+            loss_act + loss_request_slot + loss_objects + loss_slot_query
 
         self.log("train_loss", loss.item())
         self.log("train_loss_disamb", loss_disamb.item())
         self.log("train_loss_disamb_obj", loss_disamb_obj.item())
         self.log("train_loss_act", loss_act.item())
-        self.log("train_loss_is_req", loss_is_req.item())
-        self.log("train_loss_slots", loss_slots.item())
-        self.log("train_loss_object_exists", loss_object_exists.item())
-        self.log("train_loss_label", loss_label.item())
+        self.log("train_loss_request_slot", loss_request_slot.item())
+        self.log("train_loss_objects", loss_objects.item())
+        self.log("train_loss_slot_query", loss_slot_query.item())
 
         return loss
 
     def validation_step(self, batch, batch_idx):
         context = batch["context"]
-        objects = batch["objects"]
+        object_map = batch["object_map"]
         object_masks = batch["object_masks"]
 
         disamb = batch["disamb"]
         disamb_objects = batch["disamb_objects"].float()
 
         acts = batch["acts"]
-        is_req = batch["is_request"]
-        slots = batch["slots"].float()
+        request_slot = batch["request_slot"].float()
+        objects = batch["objects"].float()
 
-        object_exists = batch["object_exists"].float()
-        labels = batch["labels"].float()
+        slot_query = batch["slot_query"].float()
 
-        outputs = self.model(context, objects, object_masks)
+        outputs = self.model(context, object_map, object_masks)
 
         loss_disamb = F.binary_cross_entropy_with_logits(outputs.disamb, disamb)
 
@@ -141,23 +143,25 @@ class OSNetEngine(pl.LightningModule):
         loss_disamb_obj = (loss_disamb_obj * disamb.unsqueeze(-1)).mean()
 
         loss_act = F.cross_entropy(outputs.acts, acts)
-        loss_is_req = F.binary_cross_entropy_with_logits(outputs.is_request, is_req)
-        loss_slots = F.binary_cross_entropy_with_logits(outputs.slots, slots)
+        loss_request_slot = F.binary_cross_entropy_with_logits(outputs.request_slot, request_slot)
+        loss_objects = F.binary_cross_entropy_with_logits(outputs.objects, objects)
 
-        loss_object_exists = F.binary_cross_entropy_with_logits(outputs.object_exists, object_exists)
-        loss_label = F.binary_cross_entropy_with_logits(outputs.objects, labels, reduce=False)
-        loss_label = (loss_label * object_exists.unsqueeze(-1)).mean()
+        loss_slot_query = F.binary_cross_entropy_with_logits(outputs.slot_query, slot_query)
 
-        loss = loss_object_exists + loss_label + loss_disamb + loss_disamb_obj + loss_act + loss_is_req + loss_slots
+        loss = loss_disamb + loss_disamb_obj + \
+            loss_act + loss_request_slot + loss_objects + loss_slot_query
+
+        act_disamb = (torch.eq(outputs.disamb > 0, disamb > 0).float()).mean()
 
         self.log("val_loss", loss.item(), prog_bar=True)
         self.log("val_loss_disamb", loss_disamb.item())
         self.log("val_loss_disamb_obj", loss_disamb_obj.item())
         self.log("val_loss_act", loss_act.item())
-        self.log("val_loss_is_req", loss_is_req.item())
-        self.log("val_loss_slots", loss_slots.item())
-        self.log("val_loss_object_exists", loss_object_exists.item())
-        self.log("val_loss_label", loss_label.item())
+        self.log("val_loss_request_slot", loss_request_slot.item())
+        self.log("val_loss_objects", loss_objects.item())
+        self.log("val_loss_slot_query", loss_slot_query.item())
+
+        self.log("val_acc_disamb", act_disamb.item())
 
     def configure_optimizers(self):
         low_lr_parameters = [
@@ -168,13 +172,12 @@ class OSNetEngine(pl.LightningModule):
             self.model.context_proj,
             self.model.object_feat,
             self.model.os_trans,
-            self.model.object_classifier,
-            self.model.object_head,
             self.model.disamb_classifier,
             self.model.disamb_head,
             self.model.act_classifier,
-            self.model.is_req_classifier,
-            self.model.slot_classifier
+            self.model.request_slot_classifier,
+            self.model.objects_head,
+            self.model.slot_query,
         ]
 
         opt_elements = []
