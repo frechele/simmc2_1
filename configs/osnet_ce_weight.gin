@@ -1,0 +1,13 @@
+import simmc.engine.osnet_engine
+
+train.engine = @OSNetEngine()
+train.experiment_name = "simmc2.1"
+OSNetEngine.train_dataset = "/data/simmc2/train_dials.pkl"
+OSNetEngine.val_dataset = "/data/simmc2/dev_dials.pkl"
+OSNetEngine.act_ce_weight = "/data/simmc2/train_ce_weight.pth"
+
+OSNetEngine.batch_size = 32
+OSNetEngine.lr = 1e-3
+OSNetEngine.bert_lr = 1e-6
+OSNetEngine.weight_decay = 2e-5
+
