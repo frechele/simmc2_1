@@ -1,45 +1,37 @@
 import numpy as np
 
+from simmc.data.metadata import MetadataDB
 import simmc.data.labels as L
 from simmc.data.labels import label_to_onehot, labels_to_vector
 
 
-def metadata_to_vec(metadata):
+def metadata_to_feat(metadata, db: MetadataDB):
     domain = metadata["domain"]
 
     if domain == "fashion":
-        return fashion_metadata_to_vec(metadata)
+        return fashion_metadata_to_feat(metadata, db)
     elif domain == "furniture":
-        return furniture_metadata_to_vec(metadata)
+        return furniture_metadata_to_feat(metadata, db)
 
     raise ValueError(f"Unknown domain: {domain}")
 
+def fashion_metadata_to_feat(metadata, db: MetadataDB):
+    slot_idxes = []
+    slot_values = []
 
-OBJECT_FEATURE_SIZE = len(L.TYPE_MAPPING_TABLE) \
-                + len(L.ASSET_TYPE_MAPPING_TABLE) \
-                + len(L.BRAND_MAPPING_TABLE) \
-                + len(L.MATERIAL_MAPPING_TABLE) \
-                + len(L.COLOR_MAPPING_TABLE) \
-                + 1  # domain
+    for k in ["brand", "type", "assetType", "pattern"]:
+        slot_idxes.append(db.get_key_idx(k))
+        slot_values.append(db.get_idx(k, metadata.get(k, None)))
 
-
-def fashion_metadata_to_vec(metadata):
-    domain = np.array([0.])
-    obj_type = label_to_onehot(metadata["type"], L.TYPE_MAPPING_TABLE)
-    asset_type = label_to_onehot(metadata["assetType"], L.ASSET_TYPE_MAPPING_TABLE)
-    brand = label_to_onehot(metadata["brand"], L.BRAND_MAPPING_TABLE)
-    material = label_to_onehot(metadata["pattern"], L.MATERIAL_MAPPING_TABLE)
-    color = labels_to_vector(metadata["color"], L.COLOR_MAPPING_TABLE)
-
-    return np.concatenate([domain, obj_type, asset_type, brand, material, color])
+    return np.array(slot_idxes), np.array(slot_values)
 
 
-def furniture_metadata_to_vec(metadata):
-    domain = np.array([1.])
-    obj_type = label_to_onehot(metadata["type"], L.TYPE_MAPPING_TABLE)
-    asset_type = np.zeros(len(L.ASSET_TYPE_MAPPING_TABLE))
-    brand = label_to_onehot(metadata["brand"], L.BRAND_MAPPING_TABLE)
-    material = label_to_onehot(metadata["materials"], L.MATERIAL_MAPPING_TABLE)
-    color = labels_to_vector(metadata["color"], L.COLOR_MAPPING_TABLE)
+def furniture_metadata_to_feat(metadata, db: MetadataDB):
+    slot_idexs = []
+    slot_values = []
 
-    return np.concatenate([domain, obj_type, asset_type, brand, material, color])
+    for k in ["brand", "type", "materials", db.pad_str]:
+        slot_idexs.append(db.get_key_idx(k))
+        slot_values.append(db.get_idx(k, metadata.get(k, None)))
+
+    return np.array(slot_idexs), np.array(slot_values)

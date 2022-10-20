@@ -5,9 +5,10 @@ import pickle
 from tqdm import tqdm
 import numpy as np
 
-from simmc.data.preprocess import metadata_to_vec
+from simmc.data.metadata import MetadataDB
+from simmc.data.preprocess import metadata_to_feat
 import simmc.data.labels as L
-from simmc.data.labels import label_to_onehot, labels_to_vector
+from simmc.data.labels import labels_to_vector
 
 
 FIELDNAME_DIALOG = "dialogue"
@@ -19,10 +20,9 @@ FIELDNAME_DISAMB_LABEL = "disambiguation_label"
 FIELDNAME_DISAMB_OBJS = "disambiguation_candidates"
 
 
-def convert(dialogues, scenes, len_context):
+def convert(dialogues, scenes, len_context, db: MetadataDB):
     results = defaultdict(list)
 
-    act_set = set()
     max_objects = 0
     for dialogue_data in tqdm(dialogues):
         prev_asst_uttr = None
@@ -41,7 +41,7 @@ def convert(dialogues, scenes, len_context):
                     continue
 
                 new_idx = len(object_map)
-                object_map.append(metadata_to_vec(scene["objects"][old_idx]))
+                object_map.append(metadata_to_feat(scene["objects"][old_idx], db))
                 raw_metadata[object_id] = scene["objects"][old_idx]
                 id_to_idx[object_id] = new_idx
 
@@ -79,19 +79,20 @@ def convert(dialogues, scenes, len_context):
             # subtask 3 outputs
             results["acts"].append(L.ACTION_MAPPING_TABLE[user_belief["act"]])
 
+            objs = [id_to_idx[obj_id] for obj_id in user_belief["act_attributes"]["objects"]]
+            results["objects"].append(objs)
+
             request_slots = user_belief["act_attributes"]["request_slots"]
             if len(request_slots) == 0:
                 request_slots = np.zeros(len(L.SLOT_KEY_MAPPING_TABLE))
             else:
                 request_slots = labels_to_vector(request_slots, L.SLOT_KEY_MAPPING_TABLE)
-            results["request_slots"].append(request_slots)
 
-            objs = [id_to_idx[obj_id] for obj_id in user_belief["act_attributes"]["objects"]]
-            results["objects"].append(objs)
+            results["request_slots"].append(request_slots)
 
             slot_values = []
             slot_query = np.zeros(len(L.SLOT_KEY_MAPPING_TABLE))
-            if len(objs) == 0 and user_belief["act"] != "INFORM:REFINE":
+            if len(objs) == 0:
                 # slot-value can be filled with only utterance
                 for k, v in user_belief["act_attributes"]["slot_values"].items():
                     slot_values.append([k, str(v).strip()])
@@ -101,14 +102,11 @@ def convert(dialogues, scenes, len_context):
 
                 if len(slots) > 0:
                     slot_query = labels_to_vector(slots, L.SLOT_KEY_MAPPING_TABLE)
+
             results["slot_values"].append(slot_values)
             results["slot_query"].append(slot_query)
 
-            if slot_query.sum() > 0 and len(objs) > 0:
-                act_set.add(user_belief["act"])
-
     print("max objects:", max_objects)
-    print(act_set)
 
     return results
 
@@ -118,6 +116,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--dialog", help="dialog file", required=True)
     parser.add_argument("--scene", help="scene info file", required=True)
+    parser.add_argument("--metadata-db", help="metadata db file", required=True)
 
     parser.add_argument("--len_context", type=int, default=2)
 
@@ -125,13 +124,15 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    db = MetadataDB(args.metadata_db)
+
     with open(args.dialog, "rt") as f:
         dialogues = json.load(f)["dialogue_data"]
 
     with open(args.scene, "rb") as f:
         scenes = pickle.load(f)
 
-    results = convert(dialogues, scenes, args.len_context)
+    results = convert(dialogues, scenes, args.len_context, db)
 
     with open(args.output, "wb") as f:
         pickle.dump(results, f)

@@ -1,4 +1,5 @@
 import argparse
+from collections import defaultdict
 import glob
 import json
 import pickle
@@ -31,6 +32,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--scene_root", help="root path of scenes", required=True)
     parser.add_argument("--output", help="output file", required=True)
+    parser.add_argument("--output-metadata-db", help="output metadata db file", required=True)
 
     args = parser.parse_args()
     fashion_metadata = load_metadata(args.fashion_metadata, "fashion")
@@ -39,6 +41,22 @@ if __name__ == "__main__":
     metadata = dict()
     metadata.update(fashion_metadata)
     metadata.update(furniture_metadata)
+
+    metadata_db = defaultdict(set)
+    for dt in metadata.values():
+        for k, v in dt.items():
+            if type(v) == list:
+                for vv in v:
+                    metadata_db[k].add(str(vv))
+            else:
+                metadata_db[k].add(str(v))
+
+    for k in metadata_db:
+        metadata_db[k] = list(metadata_db[k])
+        metadata_db[k] = sorted(metadata_db[k])
+
+    with open(args.output_metadata_db, "wb") as f:
+        pickle.dump(metadata_db, f)
 
     print("<Load metadata>")
     print("# of fashion:", len(fashion_metadata))
