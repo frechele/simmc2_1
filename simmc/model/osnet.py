@@ -89,7 +89,9 @@ class OSTransformer(nn.Module):
 
 
 OSNetOutput = namedtuple("OSNetOutput",
-    ["disamb", "disamb_objs", "acts", "request_slot", "objects", "slot_query"])
+    ["disamb", "disamb_objs", "acts", 
+    "request_slot_exist", "request_slot",
+    "object_exist", "objects", "slot_query"])
 
 # Object Sentence network
 class OSNet(nn.Module):
@@ -114,7 +116,11 @@ class OSNet(nn.Module):
         self.disamb_head = nn.Linear(self.projection_dim, 1)
 
         self.act_classifier = nn.Linear(self.projection_dim, len(L.ACTION))
+
+        self.request_slot_exist = nn.Linear(self.projection_dim, 1)
         self.request_slot_classifier = nn.Linear(self.projection_dim, len(L.SLOT_KEY))
+
+        self.object_exist = nn.Linear(self.projection_dim, 1)
         self.objects_head = nn.Linear(self.projection_dim, 1)
 
         self.slot_query = nn.Linear(self.projection_dim, len(L.SLOT_KEY))
@@ -133,8 +139,10 @@ class OSNet(nn.Module):
 
         act = self.act_classifier(context_proj)
 
+        request_slot_exist = self.request_slot_exist(context_proj)
         request_slot = self.request_slot_classifier(context_proj)
 
+        object_exist = self.object_exist(object_proj.mean(dim=1))
         objects = self.objects_head(object_proj).squeeze(-1)
         objects.masked_fill_(object_mask, -1e4)
 
@@ -144,7 +152,11 @@ class OSNet(nn.Module):
             disamb=disamb,
             disamb_objs=disamb_objs,
             acts=act,
+
+            request_slot_exist=request_slot_exist,
             request_slot=request_slot,
+
+            object_exist=object_exist,
             objects=objects,
             slot_query=slot_query
         )

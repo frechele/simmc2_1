@@ -51,15 +51,17 @@ class Predictor:
         act = L.ACTION[output.acts.argmax(dim=1).item()]
 
         request_slots = []
-        for i, slot in enumerate(output.request_slot.cpu().numpy()[0]):
-            if slot > 0:
-                request_slots.append(L.SLOT_KEY[i])
+        if output.request_slot_exist.item() > 0:
+            for i, slot in enumerate(output.request_slot.cpu().numpy()[0]):
+                if slot > 0:
+                    request_slots.append(L.SLOT_KEY[i])
 
         objects = []
-        objects_sim = output.objects.squeeze()
-        for i, obj_id in enumerate(object_ids):
-            if objects_sim[i] > 0:
-                objects.append(obj_id)
+        if output.object_exist.item() > 0:
+            objects_sim = output.objects.squeeze()
+            for i, obj_id in enumerate(object_ids):
+                if objects_sim[i] > 0:
+                    objects.append(obj_id)
 
         slot_values = []
         if act == "INFORM:GET":

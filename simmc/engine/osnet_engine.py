@@ -33,11 +33,11 @@ class collate_fn:
         return { k: proc(k) for k in samples[0] }
 
 
-def focal_loss(inputs: torch.Tensor, targets: torch.Tensor, alpha: float = 0.25, gamma: float = 2, reduce: bool = True):
+def focal_loss(inputs: torch.Tensor, targets: torch.Tensor, weight: torch.Tensor = None, alpha: float = 0.25, gamma: float = 2, reduce: bool = True):
     p = torch.sigmoid(inputs)
     p_t = p * targets + (1 - p) * (1 - targets)
 
-    loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction="none") * ((1. - p_t) ** gamma)
+    loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction="none", weight=weight) * ((1. - p_t) ** gamma)
 
     alpha_t = alpha * targets + (1 - alpha) * (1 - targets)
     loss = alpha_t * loss
@@ -87,35 +87,50 @@ class OSNetEngine(pl.LightningModule):
         disamb_objects = batch["disamb_objects"].float()
 
         acts = batch["acts"]
+
+        request_slot_exist = batch["request_slot_exist"]
         request_slot = batch["request_slot"].float()
+
+        object_exist = batch["object_exist"]
         objects = batch["objects"].float()
 
         slot_query = batch["slot_query"].float()
 
         outputs = self.model(context, object_map, object_masks)
 
+        object_masks = object_masks.float()
+
         loss_disamb = focal_loss(outputs.disamb, disamb)
 
-        loss_disamb_obj = focal_loss(outputs.disamb_objs, disamb_objects, reduce=False)
+        loss_disamb_obj = focal_loss(outputs.disamb_objs, disamb_objects, reduce=False, weight=(1 - object_masks))
         loss_disamb_obj = (loss_disamb_obj * disamb.unsqueeze(-1)).mean()
 
         if hasattr(self, "act_ce_weight"):
             loss_act = F.cross_entropy(outputs.acts, acts, weight=self.act_ce_weight, label_smoothing=0.1)
         else:
             loss_act = F.cross_entropy(outputs.acts, acts, label_smoothing=0.1)
-        loss_request_slot = focal_loss(outputs.request_slot, request_slot)
-        loss_objects = focal_loss(outputs.objects, objects)
+
+        loss_request_slot_exist = focal_loss(outputs.request_slot_exist, request_slot_exist)
+        loss_request_slot = focal_loss(outputs.request_slot, request_slot, reduce=False)
+        loss_request_slot = (loss_request_slot * request_slot_exist).mean()
+
+        loss_object_exist = focal_loss(outputs.object_exist, object_exist)
+        loss_objects = focal_loss(outputs.objects, objects, reduce=False, weight=(1 - object_masks))
+        loss_objects = (loss_objects * object_exist.unsqueeze(-1)).mean()
 
         loss_slot_query = focal_loss(outputs.slot_query, slot_query)
 
         loss = loss_disamb + loss_disamb_obj + \
-            loss_act + loss_request_slot + loss_objects + loss_slot_query
+            loss_act + loss_request_slot_exist + loss_request_slot + \
+            loss_object_exist + loss_objects + loss_slot_query
 
         self.log("train_loss", loss.item())
         self.log("train_loss_disamb", loss_disamb.item())
         self.log("train_loss_disamb_obj", loss_disamb_obj.item())
         self.log("train_loss_act", loss_act.item())
+        self.log("train_loss_request_slot_exist", loss_request_slot_exist.item())
         self.log("train_loss_request_slot", loss_request_slot.item())
+        self.log("train_loss_object_exist", loss_object_exist.item())
         self.log("train_loss_objects", loss_objects.item())
         self.log("train_loss_slot_query", loss_slot_query.item())
 
@@ -130,28 +145,49 @@ class OSNetEngine(pl.LightningModule):
         disamb_objects = batch["disamb_objects"].float()
 
         acts = batch["acts"]
+
+        request_slot_exist = batch["request_slot_exist"]
         request_slot = batch["request_slot"].float()
+
+        object_exist = batch["object_exist"]
         objects = batch["objects"].float()
 
         slot_query = batch["slot_query"].float()
 
         outputs = self.model(context, object_map, object_masks)
 
+        object_masks = object_masks.float()
+
         loss_disamb = F.binary_cross_entropy_with_logits(outputs.disamb, disamb)
 
-        loss_disamb_obj = F.binary_cross_entropy_with_logits(outputs.disamb_objs, disamb_objects, reduce=False)
+        loss_disamb_obj = F.binary_cross_entropy_with_logits(outputs.disamb_objs, disamb_objects, reduce=False, weight=(1 - object_masks))
         loss_disamb_obj = (loss_disamb_obj * disamb.unsqueeze(-1)).mean()
 
         loss_act = F.cross_entropy(outputs.acts, acts)
-        loss_request_slot = F.binary_cross_entropy_with_logits(outputs.request_slot, request_slot)
-        loss_objects = F.binary_cross_entropy_with_logits(outputs.objects, objects)
+
+        loss_request_slot = F.binary_cross_entropy_with_logits(outputs.request_slot, request_slot, reduce=False)
+        loss_request_slot = (loss_request_slot * request_slot_exist).mean()
+
+        loss_objects = F.binary_cross_entropy_with_logits(outputs.objects, objects, reduce=False, weight=(1 - object_masks))
+        loss_objects = (loss_objects * object_exist.unsqueeze(-1)).mean()
 
         loss_slot_query = F.binary_cross_entropy_with_logits(outputs.slot_query, slot_query)
 
         loss = loss_disamb + loss_disamb_obj + \
             loss_act + loss_request_slot + loss_objects + loss_slot_query
 
-        act_disamb = (torch.eq(outputs.disamb > 0, disamb > 0).float()).mean()
+        acc_disamb = (torch.eq(outputs.disamb > 0, disamb > 0).float()).mean()
+        acc_disamb_obj = (torch.eq(outputs.disamb_objs > 0, disamb_objects > 0).float() * (1 - object_masks)).sum() / (1 - object_masks).sum()
+
+        acc_act = (torch.eq(outputs.acts.argmax(-1), acts).float()).mean()
+
+        acc_request_slot_exist = (torch.eq(outputs.request_slot_exist > 0, request_slot_exist > 0).float()).mean()
+        acc_request_slot = (torch.eq(outputs.request_slot > 0, request_slot > 0).float()).mean()
+
+        acc_object_exist = (torch.eq(outputs.object_exist > 0, object_exist > 0).float()).mean()
+        acc_objects = (torch.eq(outputs.objects > 0, objects > 0).float() * (1 - object_masks)).sum() / (1 - object_masks).sum()
+
+        acc_slot_query = (torch.eq(outputs.slot_query > 0, slot_query > 0).float()).mean()
 
         self.log("val_loss", loss.item(), prog_bar=True)
         self.log("val_loss_disamb", loss_disamb.item())
@@ -161,7 +197,18 @@ class OSNetEngine(pl.LightningModule):
         self.log("val_loss_objects", loss_objects.item())
         self.log("val_loss_slot_query", loss_slot_query.item())
 
-        self.log("val_acc_disamb", act_disamb.item())
+        self.log("val_acc_disamb", acc_disamb.item())
+        self.log("val_acc_disamb_obj", acc_disamb_obj.item())
+
+        self.log("val_acc_act", acc_act.item())
+
+        self.log("val_acc_request_slot_exist", acc_request_slot_exist.item())
+        self.log("val_acc_request_slot", acc_request_slot.item())
+
+        self.log("val_acc_object_exist", acc_object_exist.item())
+        self.log("val_acc_objects", acc_objects.item())
+
+        self.log("val_acc_slot_query", acc_slot_query.item())
 
     def configure_optimizers(self):
         low_lr_parameters = [
