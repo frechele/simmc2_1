@@ -38,16 +38,3 @@ if __name__ == "__main__":
 
     print("objects mean:", sum_objects / cnt_objects)
     print("objects zero:", cnt_zero_objects / len(dataset))
-
-    lst = [(L.ACTION),
-        (L.ASSET_TYPE),
-        (L.BRAND),
-        (L.COLOR),
-        (L.MATERIAL),
-        (L.SLEEVE_LENGTH)]
-
-    total_cardinality = 1
-    for i, it in enumerate(lst):
-        print(i, len(it))
-        total_cardinality *= len(it)
-    print("total:", total_cardinality)

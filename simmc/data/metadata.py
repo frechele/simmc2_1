@@ -41,6 +41,9 @@ class MetadataDB:
     def get_key(self, idx: int) -> str:
         return self.keys[idx]
 
+    def get_cardinality(self, slot: str) -> int:
+        return len(self.db[slot])
+
 
 if __name__ == "__main__":
     db = MetadataDB("/data/simmc2/metadata_db.pkl")
