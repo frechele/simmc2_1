@@ -1,4 +1,3 @@
-from requests import request
 import torch
 import pickle
 import numpy as np
