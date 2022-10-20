@@ -6,9 +6,8 @@ from tqdm import tqdm
 import numpy as np
 
 from simmc.data.metadata import MetadataDB
-from simmc.data.preprocess import metadata_to_feat
+from simmc.data.preprocess import metadata_to_feat, labels_to_vector
 import simmc.data.labels as L
-from simmc.data.labels import labels_to_vector
 
 
 FIELDNAME_DIALOG = "dialogue"
