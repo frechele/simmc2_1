@@ -5,6 +5,9 @@ import simmc.data.labels as L
 from simmc.data.labels import label_to_onehot, labels_to_vector
 
 
+FEATURE_LIST = ["brand", "type", "assetType", "materials"]
+
+
 def metadata_to_feat(metadata, db: MetadataDB):
     domain = metadata["domain"]
 
@@ -16,22 +19,21 @@ def metadata_to_feat(metadata, db: MetadataDB):
     raise ValueError(f"Unknown domain: {domain}")
 
 def fashion_metadata_to_feat(metadata, db: MetadataDB):
-    slot_idxes = []
     slot_values = []
 
-    for k in ["brand", "type", "assetType", "pattern"]:
-        slot_idxes.append(db.get_key_idx(k))
-        slot_values.append(db.get_idx(k, metadata.get(k, None)))
+    fashion_feature_list = FEATURE_LIST[:]
+    fashion_feature_list[-1] = "pattern"
 
-    return np.array(slot_idxes), np.array(slot_values)
+    for k in fashion_feature_list:
+        slot_values.append(db.get_idx(k, metadata.get(k, db.pad_str)))
+
+    return np.array(slot_values)
 
 
 def furniture_metadata_to_feat(metadata, db: MetadataDB):
-    slot_idexs = []
     slot_values = []
 
-    for k in ["brand", "type", "materials", db.pad_str]:
-        slot_idexs.append(db.get_key_idx(k))
-        slot_values.append(db.get_idx(k, metadata.get(k, None)))
+    for k in FEATURE_LIST:
+        slot_values.append(db.get_idx(k, metadata.get(k, db.pad_str)))
 
-    return np.array(slot_idexs), np.array(slot_values)
+    return np.array(slot_values)

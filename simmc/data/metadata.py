@@ -6,7 +6,7 @@ class MetadataDB:
         with open(path, "rb") as f:
             self.db = pickle.load(f)
 
-        self.pad_str = "pad"
+        self.pad_str = "<pad>"
         self.pad_idx = 0
 
         self.keys = []
@@ -14,6 +14,7 @@ class MetadataDB:
         self.db_inv = dict()
         for k in self.db:
             self.keys.append(k)
+            self.db[k].insert(0, self.pad_str)
             self.db_inv[k] = dict()
             for i, v in enumerate(self.db[k]):
                 self.db_inv[k][v] = i
@@ -24,13 +25,13 @@ class MetadataDB:
 
     def get_idx(self, slot: str, value: str) -> int:
         if slot == self.pad_str:
-            return 0
+            return self.pad_idx
 
         return self.db_inv[slot][value]
 
     def get(self, slot: str, idx: int) -> str:
         if slot == self.pad_str:
-            return 0
+            return self.pad_str
 
         return self.db[slot][idx]
 

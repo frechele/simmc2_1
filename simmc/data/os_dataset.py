@@ -5,8 +5,6 @@ import numpy as np
 
 from torch.utils.data import Dataset
 
-from simmc.data.preprocess import OBJECT_FEATURE_SIZE
-
 
 class OSDataset(Dataset):
     def __init__(self, filename: str, object_padding: int = 140):
@@ -40,7 +38,7 @@ class OSDataset(Dataset):
         object_map = self.object_map[index]
         object_padding_len = max(0, self.object_padding - len(object_map))
         object_padding_mask = np.array([0] * len(object_map) + [1] * object_padding_len)
-        object_map += [np.zeros(OBJECT_FEATURE_SIZE)] * object_padding_len
+        object_map += [np.zeros(object_map[0].shape[0])] * object_padding_len
         object_map = np.array(object_map)
 
         # subtask 2
@@ -65,7 +63,7 @@ class OSDataset(Dataset):
 
         return {
             "context": context,
-            "object_map": torch.FloatTensor(object_map),
+            "object_map": torch.LongTensor(object_map),
             "object_masks": torch.BoolTensor(object_padding_mask),
 
             "disamb": torch.tensor(disamb, dtype=torch.float).unsqueeze(-1),
