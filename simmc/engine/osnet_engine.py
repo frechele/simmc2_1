@@ -1,7 +1,6 @@
 import gin
 
 import pytorch_lightning as pl
-from pytorch_lightning.utilities.rank_zero import rank_zero_only
 
 import torch
 import torch.nn as nn
@@ -13,6 +12,7 @@ from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 import mlflow
 import mlflow.pytorch
 
+from simmc.data.metadata import MetadataDB
 from simmc.data.os_dataset import OSDataset
 from simmc.model.osnet import create_tokenizer, OSNet, calc_object_similarity
 
@@ -49,17 +49,21 @@ def focal_loss(inputs: torch.Tensor, targets: torch.Tensor, weight: torch.Tensor
 
 @gin.configurable
 class OSNetEngine(pl.LightningModule):
-    def __init__(self, train_dataset: str, val_dataset: str, act_ce_weight: str = None,
+    def __init__(self, train_dataset: str, val_dataset: str, metadata_db_path: str, act_ce_weight: str = None,
         batch_size: int = 32, lr: float = 1e-3, bert_lr: float = 1e-6, weight_decay: float = 1e-5):
         super(OSNetEngine, self).__init__()
 
-        self.model = OSNet()
+        self.db = MetadataDB(metadata_db_path)
+
+        self.model = OSNet(self.db)
 
         self.train_dataset_path = train_dataset
         self.val_dataset_path = val_dataset
 
         if act_ce_weight:
             self.act_ce_weight = self.register_buffer("act_ce_weight", torch.load(act_ce_weight))
+
+        self.pos_weight = self.register_buffer("pos_weight", torch.tensor(100.))
 
         self.batch_size = batch_size
         self.lr = lr
@@ -102,7 +106,7 @@ class OSNetEngine(pl.LightningModule):
 
         loss_disamb = focal_loss(outputs.disamb, disamb)
 
-        loss_disamb_obj = focal_loss(outputs.disamb_objs, disamb_objects, reduce=False, weight=(1 - object_masks))
+        loss_disamb_obj = F.binary_cross_entropy_with_logits(outputs.disamb_objs, disamb_objects, reduce=False, weight=(1 - object_masks), pos_weight=self.pos_weight)
         loss_disamb_obj = (loss_disamb_obj * disamb.unsqueeze(-1)).mean()
 
         if hasattr(self, "act_ce_weight"):
@@ -115,7 +119,7 @@ class OSNetEngine(pl.LightningModule):
         loss_request_slot = (loss_request_slot * request_slot_exist).mean()
 
         loss_object_exist = focal_loss(outputs.object_exist, object_exist)
-        loss_objects = focal_loss(outputs.objects, objects, reduce=False, weight=(1 - object_masks))
+        loss_objects = F.binary_cross_entropy_with_logits(outputs.objects, objects, reduce=False, weight=(1 - object_masks), pos_weight=self.pos_weight)
         loss_objects = (loss_objects * object_exist.unsqueeze(-1)).mean()
 
         loss_slot_query = focal_loss(outputs.slot_query, slot_query)
@@ -218,7 +222,7 @@ class OSNetEngine(pl.LightningModule):
         high_lr_parameters = [
             self.model.context_proj,
             self.model.object_feat,
-            self.model.os_trans,
+            self.model.object_proj,
             self.model.disamb_classifier,
             self.model.disamb_head,
             self.model.act_classifier,

@@ -6,8 +6,9 @@ import torch.nn.functional as F
 
 from transformers import AlbertModel, AlbertTokenizer
 
-from simmc.data.preprocess import OBJECT_FEATURE_SIZE
+from simmc.data.metadata import MetadataDB
 import simmc.data.labels as L
+from simmc.model.object_enc import ObjectEncoder
 
 
 BERT_MODEL_NAME = "albert-base-v2"
@@ -20,72 +21,43 @@ def create_tokenizer():
     return tokenizer
 
 
-class OSBlock(nn.Module):
-    def __init__(self, embed_dim: int, num_heads: int, dropout: float):
-        super(OSBlock, self).__init__()
+class CrossAttention(nn.Module):
+    def __init__(self, embed_dim: int, dropout: float = 0.1):
+        super(CrossAttention, self).__init__()
 
         self.embed_dim = embed_dim
-        self.num_heads = num_heads
-        self.dim_per_head = embed_dim // num_heads
-
-        self.w_q = nn.Linear(embed_dim, embed_dim, bias=False)
-        self.w_kv = nn.Linear(embed_dim, embed_dim * 2, bias=False)
         self.scale = embed_dim ** -0.5
 
-        self.norm1 = nn.LayerNorm(embed_dim)
-        self.norm2 = nn.LayerNorm(embed_dim)
-
-        self.ffn = nn.Sequential(
-            nn.Linear(embed_dim, embed_dim * 4),
-            nn.GELU(),
-            nn.Dropout(p=dropout),
-            nn.Linear(embed_dim * 4, embed_dim),
+        self.q_fc = nn.Sequential(
+            nn.Linear(embed_dim, embed_dim),
+            nn.LayerNorm(embed_dim)
+        )
+        self.kv_fc = nn.Sequential(
+            nn.Linear(embed_dim, embed_dim * 2),
+            nn.LayerNorm(embed_dim * 2)
         )
 
-    def forward(self, context: torch.Tensor, objects: torch.Tensor, object_mask: torch.Tensor):
-        # context: [batch_size, embed_dim]
-        # objects: [batch_size, object_num, embed_dim]
-        # object_mask: [batch_size, object_num]
-        batch_size = context.size(0)
-        object_size = objects.size(1)
+        self.o_fc = nn.Sequential(
+            nn.Dropout(dropout, inplace=True),
+            nn.LayerNorm(embed_dim),
+            nn.Linear(embed_dim, embed_dim * 2),
+            nn.Dropout(dropout, inplace=True),
+            nn.GELU(),
+            nn.Linear(embed_dim * 2, embed_dim),
+        )
 
-        query = self.w_q(context)
-        key, value = torch.split(self.w_kv(objects), self.embed_dim, dim=-1)
+    def forward(self, context: torch.Tensor, object_map: torch.Tensor, object_mask: torch.Tensor) -> torch.Tensor:
+        query = self.q_fc(context)
+        key, value = self.kv_fc(object_map).split(self.embed_dim, dim=-1)
 
-        query = query.view(batch_size, self.num_heads, self.dim_per_head)
-        key = key.view(batch_size, -1, self.num_heads, self.dim_per_head)
-        value = value.view(batch_size, -1, self.num_heads, self.dim_per_head)
+        x_qk = torch.einsum("bi, boj -> bo", query, key) * self.scale
+        x_qk = x_qk.masked_fill(object_mask, -1e4)
+        x_qk = torch.softmax(x_qk, dim=-1)
 
-        z = torch.einsum("bhi, bohi -> boh", query, key) * self.scale
-        masking_value = -torch.finfo(z.dtype).max
-        object_mask = object_mask.unsqueeze(-1)
-        object_mask = object_mask.expand(-1, -1, self.num_heads)
-        z.masked_fill_(object_mask, masking_value)
+        x_qkv = torch.einsum("bo, boi -> boi", x_qk, value)
+        x_qkv = x_qkv + context.unsqueeze(1).expand_as(x_qkv)
 
-        attn = torch.softmax(z, dim=-1)
-
-        out = torch.einsum("boh, bohi -> bohi", attn, value)
-        out = out.view(batch_size, object_size, -1)
-
-        out = self.norm1(out + objects)
-        out = self.norm2(self.ffn(out) + out)
-
-        return out
-
-
-class OSTransformer(nn.Module):
-    def __init__(self, embed_dim: int, num_heads: int):
-        super(OSTransformer, self).__init__()
-
-        self.blocks = nn.ModuleList([OSBlock(embed_dim, num_heads, dropout=0.2) for _ in range(2)])
-
-    def forward(self, context: torch.Tensor, objects: torch.Tensor, object_mask: torch.Tensor):
-        path = objects 
-
-        for block in self.blocks:
-            path = block(context, path, object_mask)
-
-        return path
+        return x_qkv + self.o_fc(x_qkv)
 
 
 OSNetOutput = namedtuple("OSNetOutput",
@@ -95,8 +67,10 @@ OSNetOutput = namedtuple("OSNetOutput",
 
 # Object Sentence network
 class OSNet(nn.Module):
-    def __init__(self):
+    def __init__(self, db: MetadataDB):
         super(OSNet, self).__init__()
+
+        self.db = db
 
         self.bert = AlbertModel.from_pretrained(BERT_MODEL_NAME)
         self.bert.resize_token_embeddings(self.bert.config.vocab_size + 2)
@@ -104,16 +78,13 @@ class OSNet(nn.Module):
         self.projection_dim = 256 
 
         self.context_proj = nn.Linear(768, self.projection_dim)
+        self.context_proj2 = nn.Linear(768, self.projection_dim)
 
-        self.object_feat = nn.Sequential(
-            nn.Linear(OBJECT_FEATURE_SIZE, self.projection_dim),
-            nn.Mish(inplace=True),
-        )
-
-        self.os_trans = OSTransformer(self.projection_dim, 8)
+        self.object_feat = ObjectEncoder(self.db, self.projection_dim)
+        self.object_proj = CrossAttention(self.projection_dim)
 
         self.disamb_classifier = nn.Linear(self.projection_dim, 1)
-        self.disamb_head = nn.Linear(self.projection_dim, 1)
+        self.disamb_head = CrossAttention(self.projection_dim)
 
         self.act_classifier = nn.Linear(self.projection_dim, len(L.ACTION))
 
@@ -121,20 +92,21 @@ class OSNet(nn.Module):
         self.request_slot_classifier = nn.Linear(self.projection_dim, len(L.SLOT_KEY))
 
         self.object_exist = nn.Linear(self.projection_dim, 1)
-        self.objects_head = nn.Linear(self.projection_dim, 1)
+        self.objects_head = CrossAttention(self.projection_dim)
 
         self.slot_query = nn.Linear(self.projection_dim, len(L.SLOT_KEY))
 
     def forward(self, context_inputs: torch.Tensor, object_map: torch.Tensor, object_mask: torch.Tensor):
         context_feat = self.bert(**context_inputs).last_hidden_state[:, 0, :]
-        object_feat = self.object_feat(object_map)
-
         context_proj = self.context_proj(context_feat)
-        object_proj = self.os_trans(context_proj, object_feat, object_mask)
+        context_proj2 = self.context_proj2(context_feat)
+
+        object_feat = self.object_feat(context_proj, object_map)
 
         disamb = self.disamb_classifier(context_proj)
 
-        disamb_objs = self.disamb_head(object_proj).squeeze(-1)
+        disamb_objs = self.disamb_head(context_proj, object_feat, object_mask)
+        disamb_objs = calc_object_similarity(context_proj2, disamb_objs)
         disamb_objs.masked_fill_(object_mask, -1e4)
 
         act = self.act_classifier(context_proj)
@@ -142,8 +114,9 @@ class OSNet(nn.Module):
         request_slot_exist = self.request_slot_exist(context_proj)
         request_slot = self.request_slot_classifier(context_proj)
 
-        object_exist = self.object_exist(object_proj.mean(dim=1))
-        objects = self.objects_head(object_proj).squeeze(-1)
+        object_exist = self.object_exist(context_proj)
+        objects = self.objects_head(context_proj, object_feat, object_mask)
+        objects = calc_object_similarity(context_proj2, objects)
         objects.masked_fill_(object_mask, -1e4)
 
         slot_query = self.slot_query(context_proj)
@@ -172,7 +145,11 @@ if __name__ == "__main__":
     from random import choice
     from torchinfo import summary
 
-    net = OSNet()
+    from simmc.data.metadata import MetadataDB
+
+    db = MetadataDB("/data/simmc2/metadata_db.pkl")
+
+    net = OSNet(db)
 
     tokenizer = AlbertTokenizerFast.from_pretrained("albert-base-v2")
 
