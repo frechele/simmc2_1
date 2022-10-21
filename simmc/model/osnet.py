@@ -81,7 +81,11 @@ class OSNet(nn.Module):
         self.context_proj2 = nn.Linear(768, self.projection_dim)
 
         self.object_feat = ObjectEncoder(self.db, self.projection_dim)
-        self.object_proj = CrossAttention(self.projection_dim)
+        self.object_proj = nn.Sequential(
+            CrossAttention(self.projection_dim),
+            nn.Mish(inplace=True),
+            nn.Linear(self.projection_dim, 1)
+        )
 
         self.disamb_classifier = nn.Linear(self.projection_dim, 1)
         self.disamb_head = CrossAttention(self.projection_dim)
@@ -92,7 +96,11 @@ class OSNet(nn.Module):
         self.request_slot_classifier = nn.Linear(self.projection_dim, len(L.SLOT_KEY))
 
         self.object_exist = nn.Linear(self.projection_dim, 1)
-        self.objects_head = CrossAttention(self.projection_dim)
+        self.objects_head = nn.Sequential(
+            CrossAttention(self.projection_dim),
+            nn.Mish(inplace=True),
+            nn.Linear(self.projection_dim, 1)
+        )
 
         self.slot_query = nn.Linear(self.projection_dim, len(L.SLOT_KEY))
 
