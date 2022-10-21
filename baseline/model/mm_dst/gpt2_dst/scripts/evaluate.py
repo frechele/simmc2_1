@@ -47,4 +47,4 @@ if __name__ == "__main__":
 
     # Save report
     with open(output_path_report, "w") as f_out:
-        json.dump(report, f_out)
+        json.dump(report, f_out, indent=2)

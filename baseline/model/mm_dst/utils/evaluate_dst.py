@@ -168,27 +168,30 @@ def evaluate_from_flat_list(d_true, d_pred):
     )    
 
     return {
-        "joint_accuracy": joint_accuracy,
-        "act_rec": act_rec,
-        "act_prec": act_prec,
-        "act_f1": act_f1,
-        "act_f1_stderr": act_f1_stderr,
-        "slot_rec": slot_rec,
-        "slot_prec": slot_prec,
-        "slot_f1": slot_f1,
-        "slot_f1_stderr": slot_f1_stderr,
-        "request_slot_rec": request_slot_rec,
-        "request_slot_prec": request_slot_prec,
-        "request_slot_f1": request_slot_f1,
-        "request_slot_f1_stderr": request_slot_f1_stderr,
-        "object_rec": object_rec,
-        "object_prec": object_prec,
-        "object_f1": object_f1,
-        "object_f1_stderr": object_f1_stderr,
-        "disamb_candidate_rec": disamb_candidate_rec,
-        "disamb_candidate_prec": disamb_candidate_prec,
-        "disamb_candidate_f1": disamb_candidate_f1,
-        "disamb_candidate_f1_stderr": disamb_candidate_f1_stderr,        
+        "report": {
+            "joint_accuracy": joint_accuracy,
+            "act_rec": act_rec,
+            "act_prec": act_prec,
+            "act_f1": act_f1,
+            "act_f1_stderr": act_f1_stderr,
+            "slot_rec": slot_rec,
+            "slot_prec": slot_prec,
+            "slot_f1": slot_f1,
+            "slot_f1_stderr": slot_f1_stderr,
+            "request_slot_rec": request_slot_rec,
+            "request_slot_prec": request_slot_prec,
+            "request_slot_f1": request_slot_f1,
+            "request_slot_f1_stderr": request_slot_f1_stderr,
+            "object_rec": object_rec,
+            "object_prec": object_prec,
+            "object_f1": object_f1,
+            "object_f1_stderr": object_f1_stderr,
+            "disamb_candidate_rec": disamb_candidate_rec,
+            "disamb_candidate_prec": disamb_candidate_prec,
+            "disamb_candidate_f1": disamb_candidate_f1,
+            "disamb_candidate_f1_stderr": disamb_candidate_f1_stderr,        
+        },
+        "counts": c
     }
 
 
@@ -372,7 +375,7 @@ def d_f1(n_true, n_pred, n_correct):
     dp = b_stderr(n_pred, n_correct)
 
     r = n_correct / n_true
-    p = n_correct / n_pred
+    p = n_correct / n_pred if n_pred != 0 else 0
     f1 = 2 * p * r / (p + r) if p + r != 0 else 0
 
     d_f1 = 0.5 * f1 ** 2 * (dr / r ** 2 + dp / p ** 2)

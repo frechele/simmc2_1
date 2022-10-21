@@ -78,6 +78,7 @@ def convert_json_to_flattened(
 
     predicts = []
     targets = []
+    predict_index = []
     if input_path_special_tokens != "":
         with open(input_path_special_tokens, "r") as f_in:
             special_tokens = json.load(f_in)
@@ -183,6 +184,7 @@ def convert_json_to_flattened(
                     START_BELIEF_STATE=START_BELIEF_STATE,
                 )
                 predicts.append(predict)
+                predict_index.append(f"{dialog_id} {turn_id}")
 
                 # Format the main output
                 if output_target:
@@ -241,6 +243,10 @@ def convert_json_to_flattened(
     with open(output_path_predict, "w") as f_predict:
         X = "\n".join(predicts)
         f_predict.write(X)
+
+    with open(f"{output_path_predict}.idx", "w") as f_predict_index:
+        X = "\n".join(predict_index)
+        f_predict_index.write(X)
 
     if output_target:
         with open(output_path_target, "w") as f_target:
