@@ -31,8 +31,8 @@ class Predictor:
     @torch.no_grad()
     def predict(self, context, object_map, object_ids, metadata):
         context = self.tokenizer([context], padding=True, truncation=True, return_tensors="pt").to(device)
-        object_map = torch.FloatTensor(np.stack(object_map)).unsqueeze(0).to(device)
-        object_masks = torch.ones(1, object_map.shape[1]).bool().to(device)
+        object_map = torch.LongTensor(np.stack(object_map)).unsqueeze(0).to(device)
+        object_masks = torch.zeros(1, object_map.shape[1]).bool().to(device)
 
         output = self.net(context, object_map, object_masks)
 
