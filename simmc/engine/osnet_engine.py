@@ -76,7 +76,7 @@ class OSNetEngine(pl.LightningModule):
 
     @property
     def train_dataset(self):
-        return OSDataset(self.train_dataset_path)
+        return OSDataset(self.train_dataset_path, shuffle_objects=True)
     
     @property
     def val_dataset(self):

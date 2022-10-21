@@ -1,16 +1,19 @@
 import torch
 import pickle
 import numpy as np
+import random
 
 from torch.utils.data import Dataset
 
 
 class OSDataset(Dataset):
-    def __init__(self, filename: str, object_padding: int = 140):
+    def __init__(self, filename: str, shuffle_objects: bool = False, object_padding: int = 140):
         super(OSDataset, self).__init__()
 
         with open(filename, "rb") as f:
             data = pickle.load(f)
+
+        self.shuffle_objects = shuffle_objects
 
         self.context = data["context"]
         self.object_map = data["object_map"]
@@ -35,6 +38,8 @@ class OSDataset(Dataset):
         context = self.context[index]
 
         object_map = self.object_map[index]
+        if self.shuffle_objects:
+            random.shuffle(object_map)
         object_padding_len = max(0, self.object_padding - len(object_map))
         object_padding_mask = np.array([0] * len(object_map) + [1] * object_padding_len)
         object_map += [np.zeros(object_map[0].shape[0])] * object_padding_len
