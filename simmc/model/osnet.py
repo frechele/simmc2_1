@@ -113,8 +113,7 @@ class OSNet(nn.Module):
 
         disamb = self.disamb_classifier(context_proj)
 
-        disamb_objs = self.disamb_head(context_proj, object_feat, object_mask)
-        disamb_objs = calc_object_similarity(context_proj2, disamb_objs)
+        disamb_objs = self.disamb_head(context_proj, object_feat, object_mask).squeeze(-1)
         disamb_objs.masked_fill_(object_mask, -1e4)
 
         act = self.act_classifier(context_proj)
@@ -123,8 +122,7 @@ class OSNet(nn.Module):
         request_slot = self.request_slot_classifier(context_proj)
 
         object_exist = self.object_exist(context_proj)
-        objects = self.objects_head(context_proj, object_feat, object_mask)
-        objects = calc_object_similarity(context_proj2, objects)
+        objects = self.objects_head(context_proj, object_feat, object_mask).squeeze(-1)
         objects.masked_fill_(object_mask, -1e4)
 
         slot_query = self.slot_query(context_proj)
