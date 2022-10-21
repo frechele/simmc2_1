@@ -222,7 +222,6 @@ class OSNetEngine(pl.LightningModule):
         high_lr_parameters = [
             self.model.context_proj,
             self.model.object_feat,
-            self.model.object_proj,
             self.model.disamb_classifier,
             self.model.disamb_head,
             self.model.act_classifier,

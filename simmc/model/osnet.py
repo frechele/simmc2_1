@@ -60,10 +60,26 @@ class CrossAttention(nn.Module):
         return x_qkv + self.o_fc(x_qkv)
 
 
+class ObjectHead(nn.Module):
+    def __init__(self, embed_dim: int):
+        super(ObjectHead, self).__init__()
+
+        self.atn = CrossAttention(embed_dim)
+        self.fc = nn.Linear(embed_dim, 1)
+
+    def forward(self, context: torch.Tensor, object_map: torch.Tensor, object_mask: torch.Tensor) -> torch.Tensor:
+        x = self.atn(context, object_map, object_mask)
+        x = F.mish(x, inplace=True)
+        x = self.fc(x).squeeze(-1)
+
+        return x
+
+
 OSNetOutput = namedtuple("OSNetOutput",
     ["disamb", "disamb_objs", "acts", 
     "request_slot_exist", "request_slot",
     "object_exist", "objects", "slot_query"])
+
 
 # Object Sentence network
 class OSNet(nn.Module):
@@ -80,14 +96,9 @@ class OSNet(nn.Module):
         self.context_proj = nn.Linear(768, self.projection_dim)
 
         self.object_feat = ObjectEncoder(self.db, self.projection_dim)
-        self.object_proj = nn.Sequential(
-            CrossAttention(self.projection_dim),
-            nn.Mish(inplace=True),
-            nn.Linear(self.projection_dim, 1)
-        )
 
         self.disamb_classifier = nn.Linear(self.projection_dim, 1)
-        self.disamb_head = CrossAttention(self.projection_dim)
+        self.disamb_head = ObjectHead(self.projection_dim)
 
         self.act_classifier = nn.Linear(self.projection_dim, len(L.ACTION))
 
@@ -95,11 +106,7 @@ class OSNet(nn.Module):
         self.request_slot_classifier = nn.Linear(self.projection_dim, len(L.SLOT_KEY))
 
         self.object_exist = nn.Linear(self.projection_dim, 1)
-        self.objects_head = nn.Sequential(
-            CrossAttention(self.projection_dim),
-            nn.Mish(inplace=True),
-            nn.Linear(self.projection_dim, 1)
-        )
+        self.objects_head = ObjectHead(self.projection_dim)
 
         self.slot_query = nn.Linear(self.projection_dim, len(L.SLOT_KEY))
 
