@@ -78,7 +78,6 @@ class OSNet(nn.Module):
         self.projection_dim = 256 
 
         self.context_proj = nn.Linear(768, self.projection_dim)
-        self.context_proj2 = nn.Linear(768, self.projection_dim)
 
         self.object_feat = ObjectEncoder(self.db, self.projection_dim)
         self.object_proj = nn.Sequential(
@@ -107,7 +106,6 @@ class OSNet(nn.Module):
     def forward(self, context_inputs: torch.Tensor, object_map: torch.Tensor, object_mask: torch.Tensor):
         context_feat = self.bert(**context_inputs).last_hidden_state[:, 0, :]
         context_proj = self.context_proj(context_feat)
-        context_proj2 = self.context_proj2(context_feat)
 
         object_feat = self.object_feat(context_proj, object_map)
 
